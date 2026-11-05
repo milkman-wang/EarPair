@@ -4,6 +4,8 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>zh_CN</string>
+	<key>CFBundleDisplayName</key>
+	<string>EarPair</string>
 	<key>CFBundleExecutable</key>
 	<string>EarPair</string>
 	<key>CFBundleIdentifier</key>
@@ -11,8 +13,6 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>EarPair</string>
-	<key>CFBundleDisplayName</key>
 	<string>EarPair</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>

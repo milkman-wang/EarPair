@@ -15,7 +15,12 @@ BIN_DIR="$(swift build -c release --show-bin-path)"
 APP="build/EarPair.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN_DIR/EarPair" "$APP/Contents/MacOS/EarPair"
+# SwiftPM 链接时把 SDK 版本写成了最低系统版本，系统看到旧 SDK 就按兼容模式画界面（没有 Liquid Glass）。
+# 这里改回实际编译用的 SDK 版本。旧系统只看最低版本，不受影响。
+MIN_OS="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' Resources/Info.plist)"
+SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
+xcrun vtool -set-build-version macos "$MIN_OS" "$SDK_VERSION" -replace \
+  -output "$APP/Contents/MacOS/EarPair" "$BIN_DIR/EarPair"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 codesign --force --sign "${SIGN_IDENTITY:--}" "$APP"
 

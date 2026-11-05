@@ -7,14 +7,20 @@
 ## 0.1 能做什么
 
 - Windows 系统声音（WASAPI loopback）→ UDP 未压缩 PCM → Mac 播放，和 Mac 本地的声音同时从当前输出设备（比如 AirPods）出来。
-- Mac 菜单栏 App：单独调 Windows 声音的音量 / 静音，选缓冲大小，看连接状态和统计（丢包、迟到、欠载、时钟偏差、网络抖动、码率）。
+- Mac 菜单栏 App：面板里调 Windows 声音的音量（最高 200%）、静音、开关音量平衡；主窗口分四页：
+  - 概览：输入 / 输出电平和最近一分钟的电平曲线、音量、缓冲 / 丢包 / 时钟偏差 / 码率。
+  - 声音：音量、左右平衡、音量平衡和目标响度。
+  - 网络：缓冲大小和水位曲线、时钟漂移补偿、详细统计（丢包、迟到、欠载、裁剪、抖动、码率）。
+  - 连接：本机地址、Windows 端要运行的命令（可复制）、发送端信息。
+- 音量平衡：按 ITU-R BS.1770 测量响度，把 Windows 的声音自动调到目标响度（柔和 −20 / 标准 −16 / 响亮 −12 LUFS），最多提升 15 dB，避免两台电脑的音量差太多；输出前有限幅器（−1 dBFS），音量开大也不会削波爆音。
+- 界面跟随系统：macOS 26 起是 Liquid Glass，macOS 14 / 15 上是那个系统的原生样式。
 - 接收端会重排乱序包；丢包处补静音，前后带淡出淡入，不会爆音；自动补偿两台电脑声卡的时钟差；Wi‑Fi 卡顿后会自动把延迟拉回目标值。
 
 ## 现在的状态
 
 | 部分 | 状态 |
 |---|---|
-| Mac 接收端（菜单栏 App + 命令行工具） | 19 个单元测试通过（含 30 分钟时钟漂移模拟），本机端到端测试通过，真机实测通过 |
+| Mac 接收端（菜单栏 App + 命令行工具） | 25 个单元测试通过（含 30 分钟时钟漂移模拟和音量平衡），本机端到端测试通过，真机实测通过 |
 | Windows 发送端（C# / .NET 8 / NAudio） | 自检 18 项通过；真机实测通过：WASAPI 采集、静音保活、打包发送都正常 |
 | Windows 和 Mac 的声音一起从 AirPods 出来 | **真机实测通过**，这是 0.1 的完成标志 |
 | Windows 静音后还能不能采集 | 还没测，取决于声卡驱动 |
@@ -31,9 +37,11 @@ cd macos
 open build/EarPair.app
 ```
 
-菜单栏会出现一个耳朵图标，点开能看到本机的局域网 IP。第一次收到 Windows 发来的声音时，macOS 可能会问是否允许 EarPair 访问"本地网络"，选允许。
+菜单栏会出现一个耳朵图标，点开能看到本机的局域网 IP，面板右上角的窗口按钮打开主窗口。第一次收到 Windows 发来的声音时，macOS 可能会问是否允许 EarPair 访问"本地网络"，选允许。
 
 > 如果 `swift build` 报 llbuild 的 dyld 错误：说明当前选中的"命令行工具"和 SDK 版本对不上。脚本会自动改用 `/Applications` 里的 Xcode，也可以手动 `export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer`。
+>
+> SwiftPM 链接时会把二进制里记录的 SDK 版本写成最低系统版本（14.0），系统看到旧 SDK 就按兼容模式显示旧样式，没有 Liquid Glass。`build-app.sh` 打包时会用 `vtool` 改回实际编译用的 SDK 版本，所以请用这个脚本打包，不要直接拷贝 `swift build` 的产物。
 
 ### 2. Windows：运行发送端
 
@@ -85,10 +93,17 @@ tools/e2e.sh                                            # 端到端：真实 UDP
 
 `tools/e2e.sh` 跑三轮，每轮约 30 秒：时钟偏差、恶劣网络、C# 发送端 → Swift 接收端。没装 .NET 时跳过最后一轮。
 
+检查界面布局：把菜单栏面板和主窗口每一页渲染成 PNG（播放中 / 等待连接 × 浅色 / 深色）。离屏渲染画不出玻璃效果，所以图里用的是 macOS 14 / 15 的样式，玻璃要看真实窗口。
+
+```bash
+cd macos && swift run -c release earpair-snapshot /tmp/earpair-snapshots
+```
+
 ## 测试结果（本机，2026-11-05）
 
-- **单元测试 19 个全部通过**：
+- **单元测试 25 个全部通过**：
   - 协议测试向量；乱序、丢包、迟到、重复；切换发送端；欠载后恢复；音量和静音；变速插值精度。
+  - 音量平衡：−30 dBFS 的安静正弦被提升到 −16 LUFS（增益约 +14 dB），响的信号被压低，静音时增益保持不动，关掉时信号不变；200% 音量下限幅器把峰值压在 −1 dBFS 以内；左右平衡。
   - 发送端时钟快 / 慢 200 ppm，各连续播放 30 分钟：零欠载，缓冲始终在 56–64 ms（目标 60），偏差估计误差小于 3 ppm。
   - 1% 丢包 + 2% 乱序；每 20 秒卡顿 40 ms：都没有欠载。卡顿 150 ms：欠载一次后恢复，延迟回到目标。
 - **端到端（真实 UDP，本机回环，每轮 25 秒）**：
@@ -113,9 +128,11 @@ AirPods 自身约 130–180 ms，加上 60 ms 缓冲和约 20 ms 采集 / 输出
 ```
 protocol/audio-packet.md   包格式 v1（含测试向量）
 macos/                     Swift Package（macOS 14+）
-  Sources/EarPairCore/     接收核心：包解析、乱序 / 丢包处理、缓冲、时钟漂移补偿、UDP 接收、AVAudioEngine 输出
-  Sources/EarPair/         菜单栏 App（SwiftUI）
+  Sources/EarPairCore/     接收核心：包解析、乱序 / 丢包处理、缓冲、时钟漂移补偿、响度测量和音量平衡、限幅、UDP 接收、AVAudioEngine 输出
+  Sources/EarPairUI/       菜单栏面板和主窗口（SwiftUI）
+  Sources/EarPair/         菜单栏 App 入口
   Sources/earpair-recv/    命令行接收端（调试、无界面运行、测试）
+  Sources/earpair-snapshot/  把界面渲染成 PNG，检查布局
   Tests/EarPairCoreTests/  单元测试和长时间模拟
   scripts/build-app.sh     打包 EarPair.app
 windows/EarPair.Sender/    Windows 发送端（C# / .NET 8 / NAudio 2.2.1）
@@ -130,8 +147,9 @@ tools/                     测试发送端、录音分析、端到端测试脚�
 - 只能采集整个输出设备（系统全部声音），按 App 采集要等 0.3。
 - Windows 端的"静音保活"会让 Windows 在发送期间不自动睡眠；用 `--no-keepalive` 可以关掉，代价是 Windows 没声音时 Mac 端会显示断开。
 - Mac App 用本机临时签名。macOS 的"本地网络"权限按签名识别 App，重新构建后可能要重新授权。有 Apple 开发者证书的话：`SIGN_IDENTITY="Apple Development: …" ./scripts/build-app.sh`。
+- 界面只在 macOS 27 上实际看过；macOS 14 / 15 只验证了能编译（新系统的 API 都做了版本判断），样式还没在这两个系统上实际看过。
 - 如果在控制中心里给 EarPair 打开了"空间化立体声"，系统会再处理一遍它的声音。做 0.4 的空间音频之前，建议对 EarPair 关掉这个选项。
-- 菜单里的"时钟偏差"开播后约 1 分钟才稳定，之前显示"测量中"。实测中，音频输出刚打开时这个估计值会先冲到约 +200 ppm，大约 1 分钟后回到真实值。对听感没有影响（相当于播放速度快了万分之二），0.2 里再优化。
+- 主窗口里的"时钟偏差"开播后约 1 分钟才稳定，之前显示"测量中"。实测中，音频输出刚打开时这个估计值会先冲到约 +200 ppm，大约 1 分钟后回到真实值。对听感没有影响（相当于播放速度快了万分之二），0.2 里再优化。
 
 ## 路线图
 

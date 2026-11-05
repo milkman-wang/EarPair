@@ -1,11 +1,14 @@
 import EarPairCore
+import Foundation
 
-/// 生成测试包。样本值由帧序号决定（3 万帧内不重复），方便逐样本比对。
+/// 生成测试包。默认样本值由帧序号决定（3 万帧内不重复），方便逐样本比对；也可以改发静音或正弦。
 struct PacketFactory {
     var streamID: UInt32 = 0x4541_5250
     var sampleRate: UInt32 = 48_000
     var framesPerPacket = 240
     var silent = false
+    /// 设置后改发正弦（频率 Hz，幅度 0…1，左右相同）
+    var sine: (frequency: Double, amplitude: Double)?
 
     static func samples(atFrame f: Int) -> (left: Int16, right: Int16) {
         (Int16((f * 7) % 30_000 - 15_000), Int16(15_000 - (f * 11) % 30_000))
@@ -19,7 +22,16 @@ struct PacketFactory {
         var samples: [Int16] = []
         samples.reserveCapacity(framesPerPacket * 2)
         for f in first..<(first + framesPerPacket) {
-            let value = silent ? (left: Int16(0), right: Int16(0)) : Self.samples(atFrame: f)
+            let value: (left: Int16, right: Int16)
+            if silent {
+                value = (0, 0)
+            } else if let sine {
+                let phase = 2 * Double.pi * sine.frequency * Double(f) / Double(sampleRate)
+                let v = Int16((sine.amplitude * sin(phase) * 32767).rounded())
+                value = (v, v)
+            } else {
+                value = Self.samples(atFrame: f)
+            }
             samples.append(value.left)
             samples.append(value.right)
         }

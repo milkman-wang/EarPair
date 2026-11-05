@@ -1,25 +1,41 @@
 import AppKit
-import EarPairCore
+import EarPairUI
 import SwiftUI
 
+// 打包后 Info.plist 里的 LSUIElement 让 App 只在菜单栏显示；主窗口打开时会临时出现在 Dock 和 ⌘Tab 里。
 @main
 struct EarPairApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var controller = ReceiverController()
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarView(controller: controller)
+            MenuBarContent(controller: controller)
         } label: {
-            Image(systemName: controller.stats.state == .playing ? "ear.fill" : "ear")
+            MenuBarLabel(controller: controller)
         }
         .menuBarExtraStyle(.window)
+
+        Window("EarPair", id: MainWindow.id) {
+            MainWindow(controller: controller)
+        }
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 900, height: 620)
+        .defaultPosition(.center)
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        // 只在菜单栏显示，不占 Dock（打包后 Info.plist 里的 LSUIElement 也有同样效果）
-        NSApp.setActivationPolicy(.accessory)
+/// 菜单栏图标。启动参数带 --show-window 时顺便打开主窗口（截图、调试用）
+struct MenuBarLabel: View {
+    @ObservedObject var controller: ReceiverController
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Image(systemName: controller.isPlaying ? "ear.fill" : "ear")
+            .onAppear {
+                if CommandLine.arguments.contains("--show-window") {
+                    NSApp.activate()
+                    openWindow(id: MainWindow.id)
+                }
+            }
     }
 }

@@ -49,6 +49,16 @@ public struct ReceiverStats: Equatable, Sendable {
     public var secondsSinceLastPacket: Double?
     /// 当前流已经播放了多久（秒）。时钟偏差估计大约需要 1 分钟才稳定。
     public var secondsPlayed = 0.0
+    /// 输入电平（增益之前的峰值，带回落），dBFS
+    public var inputLevelDB = -120.0
+    /// 输出电平（音量、平衡和限幅之后的峰值，带回落），dBFS
+    public var outputLevelDB = -120.0
+    /// 输入的听感响度估计（LUFS），还没有声音时为 nil
+    public var loudnessLUFS: Double?
+    /// 音量平衡当前加上的增益（dB），关闭时为 0
+    public var levelingGainDB = 0.0
+    /// 最近半秒内限幅器是否压过峰值
+    public var isLimiting = false
 
     public init() {}
 
@@ -80,6 +90,10 @@ public final class ReceiverCore: @unchecked Sendable {
         public var driftCompensation = true
         /// 环形缓冲容量（秒）
         public var bufferCapacity = 2.0
+        /// 音量平衡：自动把远端声音的响度拉到 targetLoudness
+        public var autoLevel = false
+        /// 音量平衡的目标响度（LUFS）
+        public var targetLoudness = -16.0
 
         public init() {}
     }
@@ -134,11 +148,15 @@ public final class ReceiverCore: @unchecked Sendable {
     private var outputSampleRate = 0.0
     private var gain: Float = 1
     private var muted = false
+    /// 左右平衡，−1（只有左边）… 0 … 1（只有右边）
+    private var balance: Float = 0
+    private var meters = Meters()
     private var counters = ReceiverStats()
     private var jitter = 0.0
     private var driftEstimatePPM = 0.0
-    /// 最近一次渲染前的缓冲帧数（漂移控制看的就是这个水位）
-    private var levelBeforeRender = 0
+    /// 显示用的缓冲水位（帧），和漂移控制看的是同一个水位。
+    /// 低通滤掉按包到达造成的 5 ms 锯齿，否则界面每 0.3 秒取一次样，曲线会混叠成假的起伏。
+    private var displayLevel: Double?
     /// 当前流已经播放的帧数
     private var playedFrames = 0
     /// 新流开始时 +1：渲染侧据此重置漂移估计和插值状态
@@ -154,8 +172,36 @@ public final class ReceiverCore: @unchecked Sendable {
     private var renderLevelEpoch = -1
     private var drift = DriftController()
     private var resampler = DriftResampler()
-    private var appliedGain: Float = 1
+    private var leveler = LoudnessLeveler()
+    private var limiter = PeakLimiter()
+    private var renderRate = 48_000.0
+    private var levelingGain: Float = 1
+    private var appliedLeft: Float = 1
+    private var appliedRight: Float = 1
+    private var inputMeter = -120.0
+    private var outputMeter = -120.0
+    private var limitingHold = 0.0
     private let renderBuffer: UnsafeMutablePointer<Float>
+
+    /// 渲染线程算出的电平，在锁里交给统计
+    private struct Meters {
+        var inputLevelDB = -120.0
+        var outputLevelDB = -120.0
+        var loudnessLUFS: Double?
+        var levelingGainDB = 0.0
+        var isLimiting = false
+    }
+
+    /// 渲染一块时用到的输出设置（在锁里取一次）
+    private struct OutputSettings {
+        var gain: Float
+        var balance: Float
+        var autoLevel: Bool
+        var targetLoudness: Double
+    }
+
+    /// 电平表的回落速度（dB/秒）
+    private static let meterFallRate = 24.0
 
     public init(configuration: Configuration = Configuration()) {
         config = configuration
@@ -178,6 +224,14 @@ public final class ReceiverCore: @unchecked Sendable {
     public func setGain(_ value: Float) { lock.withLock { gain = min(max(value, 0), 2) } }
 
     public func setMuted(_ value: Bool) { lock.withLock { muted = value } }
+
+    /// 左右平衡：−1 只有左边，0 居中，1 只有右边
+    public func setBalance(_ value: Float) { lock.withLock { balance = min(max(value, -1), 1) } }
+
+    public func setAutoLevel(_ enabled: Bool) { lock.withLock { config.autoLevel = enabled } }
+
+    /// 音量平衡的目标响度（LUFS）
+    public func setTargetLoudness(_ lufs: Double) { lock.withLock { config.targetLoudness = min(max(lufs, -30), -6) } }
 
     public func setDriftCompensation(_ enabled: Bool) { lock.withLock { config.driftCompensation = enabled } }
 
@@ -446,19 +500,27 @@ public final class ReceiverCore: @unchecked Sendable {
         var ratio = 1.0
         var haveAudio = false
         var fadeIn = false
-        let targetGain: Float
+        let settings: OutputSettings
 
         lock.lock()
         if renderStreamEpoch != streamEpoch {
             renderStreamEpoch = streamEpoch
             drift.reset()
             resampler.reset()
+            displayLevel = nil
+            if let s = stream {
+                renderRate = Double(s.format.sampleRate)
+                leveler.prepare(sampleRate: renderRate)
+                limiter.prepare(sampleRate: renderRate)
+            }
         }
         if renderLevelEpoch != levelEpoch {
             renderLevelEpoch = levelEpoch
             drift.resetLevel()
+            displayLevel = nil
         }
-        targetGain = muted ? 0 : gain
+        settings = OutputSettings(gain: muted ? 0 : gain, balance: balance,
+                                  autoLevel: config.autoLevel, targetLoudness: config.targetLoudness)
         if let s = stream, let ring, state != .idle, Double(s.format.sampleRate) == outputSampleRate {
             let rate = Double(s.format.sampleRate)
             let target = targetFrames(for: s)
@@ -467,12 +529,15 @@ public final class ReceiverCore: @unchecked Sendable {
                 let keep = target + Int(0.010 * rate)
                 if ring.count > keep { ring.discard(frames: ring.count - keep) }
                 drift.resetLevel()
+                displayLevel = nil
                 state = .playing
                 hasPlayed = true
                 fadeIn = true
             }
             if state == .playing {
-                levelBeforeRender = ring.count
+                let level = Double(ring.count)
+                let smoothing = 1 - exp(-Double(n) / rate / drift.levelSmoothing)
+                displayLevel = displayLevel.map { $0 + smoothing * (level - $0) } ?? level
                 if config.driftCompensation {
                     ratio = drift.update(levelFrames: ring.count, targetFrames: target,
                                          blockFrames: n, sampleRate: rate)
@@ -500,13 +565,77 @@ public final class ReceiverCore: @unchecked Sendable {
         guard haveAudio else {
             left.update(repeating: 0, count: n)
             right.update(repeating: 0, count: n)
-            appliedGain = targetGain
+            (appliedLeft, appliedRight) = Self.channelGains(settings, leveling: levelingGain)
+            updateMeters(inputPeak: 0, outputPeak: 0, limited: false, frames: n)
             return false
         }
         resampler.process(input: renderBuffer, outputFrames: n, ratio: ratio, left: left, right: right)
         if fadeIn { Self.applyFadeIn(left: left, right: right, frames: n) }
-        applyGain(left: left, right: right, frames: n, target: targetGain)
+
+        // 音量平衡：总是分析（打开时立刻有合适的增益），只在打开时生效
+        let inputPeak = Self.peak(left: left, right: right, frames: n)
+        leveler.targetLUFS = settings.targetLoudness
+        let analyzed = leveler.process(left: left, right: right, frames: n)
+        levelingGain = settings.autoLevel ? analyzed : 1
+
+        // 音量 × 音量平衡 × 左右平衡，在这一块里线性过渡，避免"咔哒"声
+        let (wantLeft, wantRight) = Self.channelGains(settings, leveling: levelingGain)
+        Self.applyRamp(left, frames: n, from: appliedLeft, to: wantLeft)
+        Self.applyRamp(right, frames: n, from: appliedRight, to: wantRight)
+        appliedLeft = wantLeft
+        appliedRight = wantRight
+
+        // 限幅，同时量输出电平
+        var outputPeak: Float = 0
+        var limited = false
+        for i in 0..<n {
+            var l = left[i]
+            var r = right[i]
+            if limiter.process(&l, &r) {
+                limited = true
+                left[i] = l
+                right[i] = r
+            }
+            outputPeak = max(outputPeak, max(abs(l), abs(r)))
+        }
+        updateMeters(inputPeak: inputPeak, outputPeak: outputPeak, limited: limited, frames: n)
         return true
+    }
+
+    private static func channelGains(_ settings: OutputSettings, leveling: Float) -> (Float, Float) {
+        let base = settings.gain * leveling
+        return (base * min(1, 1 - settings.balance), base * min(1, 1 + settings.balance))
+    }
+
+    private static func applyRamp(_ samples: UnsafeMutablePointer<Float>, frames: Int, from start: Float, to end: Float) {
+        if start == end {
+            guard end != 1 else { return }
+            for i in 0..<frames { samples[i] *= end }
+        } else {
+            let step = (end - start) / Float(frames)
+            for i in 0..<frames { samples[i] *= start + step * Float(i + 1) }
+        }
+    }
+
+    private static func peak(left: UnsafePointer<Float>, right: UnsafePointer<Float>, frames: Int) -> Float {
+        var result: Float = 0
+        for i in 0..<frames { result = max(result, max(abs(left[i]), abs(right[i]))) }
+        return result
+    }
+
+    private static func decibels(_ value: Float) -> Double {
+        value > 1e-6 ? max(20 * log10(Double(value)), -120) : -120
+    }
+
+    private func updateMeters(inputPeak: Float, outputPeak: Float, limited: Bool, frames: Int) {
+        let dt = Double(frames) / renderRate
+        inputMeter = max(Self.decibels(inputPeak), inputMeter - Self.meterFallRate * dt)
+        outputMeter = max(Self.decibels(outputPeak), outputMeter - Self.meterFallRate * dt)
+        limitingHold = limited ? 0.5 : max(0, limitingHold - dt)
+        let snapshot = Meters(inputLevelDB: inputMeter, outputLevelDB: outputMeter,
+                              loudnessLUFS: leveler.loudnessLUFS, levelingGainDB: leveler.gainDB,
+                              isLimiting: limitingHold > 0)
+        lock.withLock { meters = snapshot }
     }
 
     private static func applyFadeIn(left: UnsafeMutablePointer<Float>, right: UnsafeMutablePointer<Float>,
@@ -519,27 +648,6 @@ public final class ReceiverCore: @unchecked Sendable {
         }
     }
 
-    private func applyGain(left: UnsafeMutablePointer<Float>, right: UnsafeMutablePointer<Float>,
-                           frames: Int, target: Float) {
-        let start = appliedGain
-        appliedGain = target
-        if start == target {
-            guard target != 1 else { return }
-            for i in 0..<frames {
-                left[i] *= target
-                right[i] *= target
-            }
-        } else {
-            // 音量变化时在这一块里线性过渡，避免"咔哒"声
-            let step = (target - start) / Float(frames)
-            for i in 0..<frames {
-                let g = start + step * Float(i + 1)
-                left[i] *= g
-                right[i] *= g
-            }
-        }
-    }
-
     // MARK: - 统计
 
     public func statistics(now: Double) -> ReceiverStats {
@@ -549,13 +657,18 @@ public final class ReceiverCore: @unchecked Sendable {
             result.targetMs = config.targetLatency * 1000
             result.jitterMs = jitter * 1000
             result.driftPPM = driftEstimatePPM
+            result.inputLevelDB = meters.inputLevelDB
+            result.outputLevelDB = meters.outputLevelDB
+            result.loudnessLUFS = meters.loudnessLUFS
+            result.levelingGainDB = config.autoLevel ? meters.levelingGainDB : 0
+            result.isLimiting = meters.isLimiting
             if let s = stream {
                 result.senderAddress = s.senderAddress
                 result.format = s.format
                 result.secondsSinceLastPacket = now - s.lastArrival
-                // 播放中显示渲染前的水位（和缓冲目标同一口径），否则显示当前缓冲量
-                let frames = state == .playing ? levelBeforeRender : (ring?.count ?? 0)
-                result.bufferedMs = Double(frames) / Double(s.format.sampleRate) * 1000
+                // 播放中显示平滑后的水位（和缓冲目标同一口径），否则显示当前缓冲量
+                let frames = state == .playing ? (displayLevel ?? 0) : Double(ring?.count ?? 0)
+                result.bufferedMs = frames / Double(s.format.sampleRate) * 1000
                 result.secondsPlayed = Double(playedFrames) / Double(s.format.sampleRate)
             }
             return result
