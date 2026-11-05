@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 发送端自检：不需要 Windows 和声卡，Mac / Linux / Windows 上都能跑。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>EarPair.Sender.SelfTest</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 直接编译发送端里与平台无关的文件，测的就是发送端实际用的代码 -->
+    <Compile Include="../EarPair.Sender/Options.cs" Link="Shared/Options.cs" />
+    <Compile Include="../EarPair.Sender/PacketEncoder.cs" Link="Shared/PacketEncoder.cs" />
+    <Compile Include="../EarPair.Sender/PcmConverter.cs" Link="Shared/PcmConverter.cs" />
+    <Compile Include="../EarPair.Sender/UdpSender.cs" Link="Shared/UdpSender.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio.Core" Version="2.2.1" />
+  </ItemGroup>
+
+</Project>
