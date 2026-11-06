@@ -58,6 +58,33 @@
   <data name="LogPausedBusy" xml:space="preserve">
     <value>Mac 正在放别的电脑的声音，暂停发送</value>
   </data>
+  <data name="LogMuteOff" xml:space="preserve">
+    <value>发送时本机静音：关</value>
+  </data>
+  <data name="LogMuteSkipped" xml:space="preserve">
+    <value>不静音 {0}：之前发现它静音后采集不到声音</value>
+  </data>
+  <data name="LogMuted" xml:space="preserve">
+    <value>已静音本机：{0}</value>
+  </data>
+  <data name="LogAlreadyMuted" xml:space="preserve">
+    <value>{0} 原来就是静音的，不动它</value>
+  </data>
+  <data name="LogMuteFailed" xml:space="preserve">
+    <value>静音 {0} 失败</value>
+  </data>
+  <data name="LogMuteVerified" xml:space="preserve">
+    <value>{0} 静音后仍能采集到声音</value>
+  </data>
+  <data name="LogUserUnmuted" xml:space="preserve">
+    <value>发送中 {0} 被取消了静音（手动或按了音量键），之后不再管它</value>
+  </data>
+  <data name="LogPostMuteSilent" xml:space="preserve">
+    <value>{0} 静音后只采集到静音，而其他程序在放声音（峰值 {1}%）已持续 2 秒，取消静音</value>
+  </data>
+  <data name="LogMuteRestored" xml:space="preserve">
+    <value>已恢复本机声音：{0}</value>
+  </data>
   <data name="LogState" xml:space="preserve">
     <value>状态：{0}</value>
   </data>

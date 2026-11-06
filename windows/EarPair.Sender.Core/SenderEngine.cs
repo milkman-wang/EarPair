@@ -646,10 +646,33 @@ public sealed class SenderEngine : IDisposable
         _postMuteFallback = false;
         _silentSince = double.NaN;
         _muteVerified = false;
-        if (!settings.MuteLocal || settings.PostMuteDevices.Contains(device.ID)) return;
+        string name = device.FriendlyName;
+        if (!settings.MuteLocal)
+        {
+            Log?.Invoke(CoreStrings.LogMuteOff);
+            return;
+        }
+        if (settings.PostMuteDevices.Contains(device.ID))
+        {
+            Log?.Invoke(CoreStrings.LogMuteSkipped(name));
+            return;
+        }
         _mute = new LocalMute(device);
+        _mute.UserUnmuted += () => Post(() => Log?.Invoke(CoreStrings.LogUserUnmuted(name)));
         _mutedAt = Now;
-        if (_mute.Mute()) MutedDeviceChanged?.Invoke(device.ID);
+        switch (_mute.Mute())
+        {
+            case MuteResult.Muted:
+                Log?.Invoke(CoreStrings.LogMuted(name));
+                MutedDeviceChanged?.Invoke(device.ID);
+                break;
+            case MuteResult.AlreadyMuted:
+                Log?.Invoke(CoreStrings.LogAlreadyMuted(name));
+                break;
+            case MuteResult.Failed:
+                Log?.Invoke(CoreStrings.LogMuteFailed(name));
+                break;
+        }
     }
 
     /// <summary>
@@ -663,14 +686,19 @@ public sealed class SenderEngine : IDisposable
         if (ours > 1e-5f)
         {
             // 静音之后还采得到声音：这台设备没问题，之后不用再查
-            if (now - _mutedAt > 1) _muteVerified = true;
+            if (now - _mutedAt > 1)
+            {
+                _muteVerified = true;
+                Log?.Invoke(CoreStrings.LogMuteVerified(mute.DeviceName));
+            }
             _silentSince = double.NaN;
             return;
         }
         // 枚举所有音频会话要走 COM，每秒查一次就够了（判定要连续 2 秒）
         if (now - _othersCheckedAt < 1) return;
         _othersCheckedAt = now;
-        if (mute.OthersPeak() <= 0.01f)
+        float others = mute.OthersPeak();
+        if (others <= 0.01f)
         {
             _silentSince = double.NaN;
             return;
@@ -678,6 +706,7 @@ public sealed class SenderEngine : IDisposable
         if (double.IsNaN(_silentSince)) _silentSince = now;
         if (now - _silentSince < 2) return;
 
+        Log?.Invoke(CoreStrings.LogPostMuteSilent(mute.DeviceName, (int)Math.Round(others * 100)));
         mute.Restore();
         MutedDeviceChanged?.Invoke(null);
         PostMuteDetected?.Invoke(mute.DeviceId);
@@ -708,9 +737,14 @@ public sealed class SenderEngine : IDisposable
         if (_mute is not null)
         {
             bool wasMuted = _mute.MutedByUs;
+            string name = _mute.DeviceName;
             _mute.Dispose();
             _mute = null;
-            if (wasMuted) MutedDeviceChanged?.Invoke(null);
+            if (wasMuted)
+            {
+                Log?.Invoke(CoreStrings.LogMuteRestored(name));
+                MutedDeviceChanged?.Invoke(null);
+            }
         }
         _encoder = null;
         _deviceId = null;

@@ -66,6 +66,41 @@
   <data name="LogPausedBusy" xml:space="preserve">
     <value>The Mac is playing another PC's sound; sending paused</value>
   </data>
+  <data name="LogMuteOff" xml:space="preserve">
+    <value>Mute this PC while sending: off</value>
+  </data>
+  <data name="LogMuteSkipped" xml:space="preserve">
+    <value>Not muting {0}: earlier it captured no sound while muted</value>
+    <comment>{0}：设备名</comment>
+  </data>
+  <data name="LogMuted" xml:space="preserve">
+    <value>Muted this PC: {0}</value>
+    <comment>{0}：设备名</comment>
+  </data>
+  <data name="LogAlreadyMuted" xml:space="preserve">
+    <value>{0} was already muted; leaving it alone</value>
+    <comment>{0}：设备名</comment>
+  </data>
+  <data name="LogMuteFailed" xml:space="preserve">
+    <value>Couldn't mute {0}</value>
+    <comment>{0}：设备名</comment>
+  </data>
+  <data name="LogMuteVerified" xml:space="preserve">
+    <value>Sound is still captured with {0} muted</value>
+    <comment>{0}：设备名</comment>
+  </data>
+  <data name="LogUserUnmuted" xml:space="preserve">
+    <value>{0} was unmuted while sending (by hand or a volume key); leaving it unmuted</value>
+    <comment>{0}：设备名</comment>
+  </data>
+  <data name="LogPostMuteSilent" xml:space="preserve">
+    <value>{0} captures only silence while muted, though other apps are playing (peak {1}%) for 2 seconds; unmuting it</value>
+    <comment>{0}：设备名，{1}：其他程序的峰值（百分比，整数）</comment>
+  </data>
+  <data name="LogMuteRestored" xml:space="preserve">
+    <value>Unmuted this PC again: {0}</value>
+    <comment>{0}：设备名</comment>
+  </data>
   <data name="LogState" xml:space="preserve">
     <value>State: {0}</value>
     <comment>{0}：状态名（英文标识，不翻译）</comment>
