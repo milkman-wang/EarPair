@@ -331,6 +331,14 @@ public sealed partial class MainWindow : Window
         TargetMenu.Items.Add(enter);
     }
 
+    /// <summary>菜单和按钮一样宽：默认按内容算宽度，比按钮窄，又是右对齐，左边会空出一截</summary>
+    private void OnTargetButtonSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var style = new Style(typeof(MenuFlyoutPresenter));
+        style.Setters.Add(new Setter(FrameworkElement.MinWidthProperty, e.NewSize.Width));
+        TargetMenu.MenuFlyoutPresenterStyle = style;
+    }
+
     private void OnDeviceChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_updating || DeviceBox.SelectedIndex < 0) return;
