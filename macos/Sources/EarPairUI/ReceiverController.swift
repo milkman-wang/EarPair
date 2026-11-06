@@ -18,9 +18,9 @@ public enum LoudnessPreset: String, CaseIterable, Identifiable, Sendable {
 
     public var title: String {
         switch self {
-        case .soft: return "柔和"
-        case .standard: return "标准"
-        case .loud: return "响亮"
+        case .soft: return String(localized: "Soft", bundle: .module)
+        case .standard: return String(localized: "Standard", bundle: .module)
+        case .loud: return String(localized: "Loud", bundle: .module)
         }
     }
 }
@@ -91,7 +91,7 @@ public final class MenuBarIcon: ObservableObject {
 /// App 的状态：持有接收核心、UDP 接收和音频输出，定时刷新统计。菜单栏和主窗口共用一个实例。
 @MainActor
 public final class ReceiverController: ObservableObject {
-    public static let port: UInt16 = 47800
+    nonisolated public static let port: UInt16 = 47800
     /// 曲线每隔几次刷新（0.1 秒一次）取一个点，一共保留多少个点：每 0.3 秒一个，约 1 分钟
     nonisolated static let historyInterval = 3
     nonisolated static let historyLength = 200
@@ -352,10 +352,15 @@ public final class ReceiverController: ObservableObject {
             try output.start(sampleRate: sampleRate)
             if outputError != nil { outputError = nil }
         } catch {
-            let message = "无法打开音频输出：\(error.localizedDescription)"
+            let message = Self.outputFailureMessage(error.localizedDescription)
             if outputError != message { outputError = message }
             outputRetryAt = MonotonicClock.now() + 2
         }
+    }
+
+    /// 音频输出打不开时显示的那句话；reason 是系统给的原因
+    nonisolated public static func outputFailureMessage(_ reason: String) -> String {
+        String(localized: "Can’t open the audio output: \(reason)", bundle: .module)
     }
 
     private func tick() {

@@ -21,21 +21,21 @@ final class ConnectionNotifier: NSObject, UNUserNotificationCenterDelegate {
         let content = UNMutableNotificationContent()
         switch notice {
         case .connected:
-            content.title = "\(sender) 已连接"
-            if let output { content.body = "从 \(output) 播放" }
+            content.title = String(localized: "Connected to \(sender)", bundle: .module)
+            if let output { content.body = String(localized: "Playing on \(output)", bundle: .module) }
         case .reconnected:
-            content.title = "已重新连上 \(sender)"
+            content.title = String(localized: "Reconnected to \(sender)", bundle: .module)
         case .stopped:
-            content.title = "\(sender) 停止发送了"
+            content.title = String(localized: "\(sender) stopped sending", bundle: .module)
         case .deviceLost:
-            content.title = "\(sender) 的声音设备断开了"
-            content.body = "设备恢复后会自动继续"
+            content.title = String(localized: "The sound device on \(sender) was disconnected", bundle: .module)
+            content.body = String(localized: "Playback will resume when the device is back.", bundle: .module)
         case .connectionLost:
-            content.title = "和 \(sender) 的连接断了"
-            content.body = "网络不稳定，正在尝试重新连接…"
+            content.title = String(localized: "Lost connection to \(sender)", bundle: .module)
+            content.body = String(localized: "The network is unstable. Trying to reconnect…", bundle: .module)
         case .gaveUp:
-            content.title = "没能重新连上 \(sender)"
-            content.body = "它再次发送时会自动连上"
+            content.title = String(localized: "Couldn’t reconnect to \(sender)", bundle: .module)
+            content.body = String(localized: "EarPair will connect again when the PC starts sending.", bundle: .module)
         }
         content.threadIdentifier = "connection"
         noticeLog.info("通知：\(content.title, privacy: .public) \(content.body, privacy: .public)")

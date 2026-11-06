@@ -28,7 +28,7 @@ public sealed class PcmConverter
             ? _bytesPerSample == 4
             : IsPcm(format) && _bytesPerSample is 2 or 3 or 4;
         if (!supported || _channels < 1 || _blockAlign < _channels * _bytesPerSample)
-            throw new NotSupportedException($"不支持的采集格式：{format}");
+            throw new NotSupportedException(CoreStrings.UnsupportedFormat(format.ToString()));
     }
 
     public static bool IsFloat(WaveFormat format) =>

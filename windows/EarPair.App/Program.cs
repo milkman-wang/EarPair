@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Dispatching;
 using Microsoft.Windows.AppLifecycle;
@@ -11,6 +12,7 @@ public static partial class Program
     private static int Main(string[] args)
     {
         WinRT.ComWrappersSupport.InitializeComWrappers();
+        SetLanguage(ArgumentAfter(args, "--lang"));
         string? demo = null, theme = null;
 #if DEBUG
         demo = ArgumentAfter(args, "--demo");
@@ -27,10 +29,10 @@ public static partial class Program
             }
         }
 
-        // 界面只有简体中文：控件自带的文字（右键菜单等）也跟着用中文
+        // 控件自带的文字（右键菜单等）和界面文字用同一种语言
         try
         {
-            Microsoft.Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = "zh-CN";
+            Microsoft.Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = Strings.ControlLanguage;
         }
         catch (Exception)
         {
@@ -74,13 +76,31 @@ public static partial class Program
         CoWaitForMultipleObjects(0, 0xFFFFFFFF, 1, [done.SafeWaitHandle.DangerousGetHandle()], out _);
     }
 
-#if DEBUG
+    /// <summary>
+    /// 界面语言默认跟随 Windows 的显示语言（简体中文，其他语言都用英文）。
+    /// 隐藏参数 --lang &lt;语言&gt;（比如 en、zh-Hans）可以指定：在中文系统里检查英文界面、截图用。
+    /// 要在创建任何界面和文字之前设好，引擎线程也跟着用。
+    /// </summary>
+    private static void SetLanguage(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return;
+        try
+        {
+            CultureInfo culture = CultureInfo.GetCultureInfo(name);
+            CultureInfo.DefaultThreadCurrentUICulture = culture;
+            CultureInfo.CurrentUICulture = culture;
+        }
+        catch (CultureNotFoundException)
+        {
+            // 不认识的语言：照常跟随系统
+        }
+    }
+
     private static string? ArgumentAfter(string[] args, string name)
     {
         int index = Array.IndexOf(args, name);
         return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
     }
-#endif
 
     [DllImport("ole32.dll")]
     private static extern uint CoWaitForMultipleObjects(uint dwFlags, uint dwMilliseconds, ulong nHandles,

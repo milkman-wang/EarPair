@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 发送引擎的文字（英文，原文）。中文在 Strings.zh-Hans.resx；术语见 docs/localization.md -->
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <!-- 错误：显示在界面的提示条和命令行里 -->
+  <data name="HostNotFound" xml:space="preserve">
+    <value>Can't find {0}</value>
+    <comment>{0}：Mac 的地址</comment>
+  </data>
+  <data name="DeviceUnavailable" xml:space="preserve">
+    <value>The output device isn't available</value>
+  </data>
+  <data name="DeviceInExclusiveUse" xml:space="preserve">
+    <value>Another app has exclusive control of the output device</value>
+  </data>
+  <data name="UnsupportedFormat" xml:space="preserve">
+    <value>Unsupported capture format: {0}</value>
+  </data>
+  <data name="ControlPacketTooLong" xml:space="preserve">
+    <value>Control packet is too long</value>
+  </data>
+
+  <!-- 采集格式：命令行和日志里显示 -->
+  <data name="FormatFloat" xml:space="preserve">
+    <value>{0} Hz, {1}-channel, {2}-bit float</value>
+    <comment>{0}：采样率，{1}：声道数，{2}：位深</comment>
+  </data>
+  <data name="FormatInteger" xml:space="preserve">
+    <value>{0} Hz, {1}-channel, {2}-bit integer</value>
+    <comment>{0}：采样率，{1}：声道数，{2}：位深</comment>
+  </data>
+
+  <!-- 日志 -->
+  <data name="LogCaptureStarted" xml:space="preserve">
+    <value>Capture started: {0} ({1}), stream {2}</value>
+    <comment>{0}：设备名，{1}：采集格式，{2}：流 id</comment>
+  </data>
+  <data name="LogMacResponded" xml:space="preserve">
+    <value>Mac responded: {0} ({1})</value>
+    <comment>{0}：Mac 的名字，{1}：Mac 上 EarPair 的版本</comment>
+  </data>
+  <data name="LogStandby" xml:space="preserve">
+    <value>No sound, standing by: audio paused, handshake kept</value>
+  </data>
+  <data name="LogResumed" xml:space="preserve">
+    <value>Sound is back, sending resumed</value>
+  </data>
+  <data name="LogWakeForMac" xml:space="preserve">
+    <value>The Mac doesn't have this stream; sending again so it can pick it up</value>
+  </data>
+  <data name="LogPausedNoResponse" xml:space="preserve">
+    <value>Can't reach the Mac; sending paused, still probing</value>
+  </data>
+  <data name="LogPausedBusy" xml:space="preserve">
+    <value>The Mac is playing another PC's sound; sending paused</value>
+  </data>
+  <data name="LogState" xml:space="preserve">
+    <value>State: {0}</value>
+    <comment>{0}：状态名（英文标识，不翻译）</comment>
+  </data>
+  <data name="LogStateWithError" xml:space="preserve">
+    <value>State: {0}, {1}</value>
+    <comment>{0}：状态名（英文标识，不翻译），{1}：错误</comment>
+  </data>
+</root>

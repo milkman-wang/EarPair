@@ -8,6 +8,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>EarPair.Sender.SelfTest</RootNamespace>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- 不变区域模式下默认只能建不变区域；自检要切到 en、zh-Hans 查文字 -->
+    <PredefinedCulturesOnly>false</PredefinedCulturesOnly>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +19,16 @@
     <Compile Include="../EarPair.Sender.Core/PcmConverter.cs" Link="Shared/PcmConverter.cs" />
     <Compile Include="../EarPair.Sender.Core/UdpSender.cs" Link="Shared/UdpSender.cs" />
     <Compile Include="../EarPair.Sender.Core/ControlPacket.cs" Link="Shared/ControlPacket.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 三个项目的界面文字（访问类和各语言的 .resx），检查每种语言都能取到、键一一对应 -->
+    <Compile Include="../EarPair.Sender.Core/Strings.cs" Link="Shared/Core/Strings.cs" />
+    <EmbeddedResource Include="../EarPair.Sender.Core/Strings*.resx" Link="Shared/Core/%(Filename)%(Extension)" />
+    <Compile Include="../EarPair.Sender/Strings.cs" Link="Shared/Cli/Strings.cs" />
+    <EmbeddedResource Include="../EarPair.Sender/Strings*.resx" Link="Shared/Cli/%(Filename)%(Extension)" />
+    <Compile Include="../EarPair.App/Strings.cs" Link="Shared/App/Strings.cs" />
+    <EmbeddedResource Include="../EarPair.App/Strings*.resx" Link="Shared/App/%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

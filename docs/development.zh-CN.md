@@ -34,16 +34,20 @@ macos/                      Swift Package（macOS 14+）
   Sources/EarPair/          App 入口
   Sources/earpair-recv/     命令行接收端
   Sources/earpair-snapshot/ 把界面渲染成 PNG
+  Sources/*/Resources/      简体中文翻译（zh-Hans.lproj）
+  Resources/                Info.plist、图标、本地网络提示的各语言文字
   Tests/EarPairCoreTests/   单元测试和长时间模拟
   scripts/build-app.sh      打包 EarPair.app
+  scripts/check-strings.sh  检查每条界面文字都有翻译
 windows/                    .NET 10
   EarPair.Sender.Core/      采集、格式转换、打包、UDP、控制包、本机静音
   EarPair.App/              WinUI 3 托盘 App（Windows App SDK 2.6，非打包、自包含）
   EarPair.Sender/           命令行版
   EarPair.Sender.SelfTest/  自检（Mac 上也能跑）
+  */Strings*.resx           界面文字：英文和简体中文
   build.ps1                 打包 zip 和单文件 exe
 tools/                      测试发送端、录音分析、端到端测试、图标生成
-docs/                       本页和 README 用的图片
+docs/                       本页、本地化说明和 README 用的图片
 ```
 
 ## 构建
@@ -59,6 +63,7 @@ cd macos
 
 - 请用这个脚本打包，不要直接拷贝 `swift build` 的产物。SwiftPM 会把最低系统版本写成 SDK 版本，macOS 看到后会按兼容模式显示旧样式（没有 Liquid Glass）；脚本会用 `vtool` 改回实际的 SDK 版本。
 - 默认是本机临时签名。macOS 按签名识别 App 的“本地网络”权限，所以每次重新构建后都要再允许一次。有 Apple 开发者证书的话：`SIGN_IDENTITY="Apple Development: …" ./scripts/build-app.sh`。
+- 脚本用 Swift Build 构建（`--build-system swiftbuild`），并把 SwiftPM 的资源包和 `.lproj` 目录拷进 `Contents/Resources`，App 在那里找翻译。
 - 如果 `swift build` 报 llbuild / dyld 错误，是当前选中的命令行工具和 SDK 对不上。脚本会自动改用 `/Applications` 里的 Xcode，也可以自己设 `DEVELOPER_DIR`。
 
 ### Windows
@@ -69,7 +74,7 @@ cd macos
 powershell -ExecutionPolicy Bypass -File windows\build.ps1
 ```
 
-产物在 `dist\`：`EarPair-<版本>-win-x64.zip`、`…-win-arm64.zip` 和命令行版单文件 exe。zip 里自带 .NET 运行时和 Windows App SDK。打包前脚本会检查发布目录（自带运行时、有 `.pri`、没有混进 AI 组件），不对就报错。
+产物在 `dist\`：`EarPair-<版本>-win-x64.zip`、`…-win-arm64.zip` 和命令行版单文件 exe。zip 里自带 .NET 运行时和 Windows App SDK。打包前脚本会检查发布目录（自带运行时、有 `.pri`、有简体中文翻译、没有混进 AI 组件），不对就报错。
 
 ## 测试
 
@@ -78,8 +83,10 @@ swift test --package-path macos                           # Mac 单元测试（�
 dotnet run --project windows/EarPair.Sender.SelfTest      # Windows 发送端自检，Mac 上也能跑
 dotnet run --project windows/EarPair.Sender.SelfTest -- hello 127.0.0.1   # 发 HELLO，检查接收端回的 STATUS
 tools/e2e.sh                                              # 端到端：真实 UDP，录音后分析（需要 numpy）
+macos/scripts/check-strings.sh                            # Mac 每条界面文字都有翻译，占位符一致
 ```
 
+- Windows 自检也检查界面文字：各语言的键一一对应、占位符一致，英文和简体中文都能取到。
 - 单元测试包括 30 分钟时钟漂移模拟（±200 ppm）、丢包和乱序、音量平衡和限幅、控制包（和 C# 端共用逐字节一致的测试向量）。
 - `tools/e2e.sh` 跑三轮，每轮约 30 秒：时钟偏差、恶劣网络、C# 打包代码 → Swift 接收端。没装 .NET 时跳过最后一轮。
 
@@ -94,15 +101,17 @@ python3 tools/test_sender.py 127.0.0.1 --clock-ppm 200 --jitter-ms 8 --loss 1 --
 
 ### 检查界面
 
-- Mac：`swift run --package-path macos -c release earpair-snapshot <目录>` 把菜单栏面板和主窗口概览页在各种状态下渲染成 PNG，主窗口其他各页只渲染等待和播放两种状态，浅色、深色各一份。离屏渲染画不出 Liquid Glass，所以用的是 macOS 14/15 的样式。在目录前加 `--readme`，渲染的是 `docs/images` 里 Mac 的截图。
+- Mac：`swift run --package-path macos -c release earpair-snapshot <目录>` 把菜单栏面板和主窗口概览页在各种状态下渲染成 PNG，主窗口其他各页只渲染等待和播放两种状态，浅色、深色各一份。离屏渲染画不出 Liquid Glass，所以用的是 macOS 14/15 的样式。加 `--lang <语言>`（`en`、`zh-Hans`）指定界面语言，不加就跟系统语言。README 的图：`earpair-snapshot --readme --lang en docs/images` 和 `earpair-snapshot --readme --lang zh-Hans docs/images/zh-CN`。
 - Windows：Debug 构建有演示模式，不采集、不连网，用假数据画出各种状态：
 
   ```powershell
   dotnet build windows\EarPair.App -c Debug -r win-x64 -p:Platform=x64
-  windows\EarPair.App\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\EarPair.exe --demo playing --theme dark
+  windows\EarPair.App\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\EarPair.exe --demo playing --theme dark --lang en
   ```
 
-  状态有 `pick` `off` `connecting` `playing` `standby` `muted` `legacy` `noresponse` `waiting` `busy` `nosource` `failed` `postmute`。
+  `--lang en` 或 `--lang zh-Hans` 指定界面语言（Release 构建也能用；`--demo` 只有 Debug 构建有）。状态有 `pick` `off` `connecting` `playing` `standby` `muted` `legacy` `noresponse` `waiting` `busy` `nosource` `failed` `postmute`。
+
+增加一种语言：见 [localization.md](localization.md)。
 
 图标由 `tools/make-icons.swift` 生成（Windows 的 `.ico` 和托盘图标、Mac 的 `.icns`）。
 

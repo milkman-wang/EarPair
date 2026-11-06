@@ -1,0 +1,2 @@
+/* 本地网络权限对话框里的说明 */
+"NSLocalNetworkUsageDescription" = "EarPair 需要接收局域网里 Windows 电脑发来的声音。";

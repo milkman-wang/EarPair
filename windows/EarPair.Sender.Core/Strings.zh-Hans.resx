@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 发送引擎的文字（简体中文）。键和 Strings.resx 一一对应 -->
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="HostNotFound" xml:space="preserve">
+    <value>找不到 {0}</value>
+  </data>
+  <data name="DeviceUnavailable" xml:space="preserve">
+    <value>输出设备不可用</value>
+  </data>
+  <data name="DeviceInExclusiveUse" xml:space="preserve">
+    <value>输出设备正被其他程序独占使用</value>
+  </data>
+  <data name="UnsupportedFormat" xml:space="preserve">
+    <value>不支持的采集格式：{0}</value>
+  </data>
+  <data name="ControlPacketTooLong" xml:space="preserve">
+    <value>控制包太长</value>
+  </data>
+
+  <data name="FormatFloat" xml:space="preserve">
+    <value>{0} Hz，{1} 声道，{2}-bit 浮点</value>
+  </data>
+  <data name="FormatInteger" xml:space="preserve">
+    <value>{0} Hz，{1} 声道，{2}-bit 整数</value>
+  </data>
+
+  <data name="LogCaptureStarted" xml:space="preserve">
+    <value>开始采集：{0}（{1}），流 {2}</value>
+  </data>
+  <data name="LogMacResponded" xml:space="preserve">
+    <value>Mac 回传：{0}（{1}）</value>
+  </data>
+  <data name="LogStandby" xml:space="preserve">
+    <value>没有声音，待机：暂停发音频，只保留握手</value>
+  </data>
+  <data name="LogResumed" xml:space="preserve">
+    <value>有声音了，恢复发送</value>
+  </data>
+  <data name="LogWakeForMac" xml:space="preserve">
+    <value>Mac 那边没有这一路流，先恢复发送让它接上</value>
+  </data>
+  <data name="LogPausedNoResponse" xml:space="preserve">
+    <value>联系不上 Mac，暂停发送，继续探测</value>
+  </data>
+  <data name="LogPausedBusy" xml:space="preserve">
+    <value>Mac 正在放别的电脑的声音，暂停发送</value>
+  </data>
+  <data name="LogState" xml:space="preserve">
+    <value>状态：{0}</value>
+  </data>
+  <data name="LogStateWithError" xml:space="preserve">
+    <value>状态：{0}，{1}</value>
+  </data>
+</root>

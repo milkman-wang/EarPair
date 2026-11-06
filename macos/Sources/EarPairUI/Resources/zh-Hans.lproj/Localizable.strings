@@ -1,0 +1,112 @@
+/* 简体中文。键是代码里的英文原文（count.* 例外：英文只显示数字，名词在标签里），规范和术语表见 docs/localization.md。 */
+
+/* 主窗口侧边栏 */
+"Overview" = "概览";
+"Sound" = "声音";
+"Network" = "网络";
+"Connection" = "连接";
+
+/* 菜单栏面板 */
+"Mute" = "静音";
+"Unmute" = "取消静音";
+"Auto level" = "音量平衡";
+"Open EarPair" = "打开 EarPair";
+"Quit EarPair" = "退出 EarPair";
+
+/* 连接状态：路线上的标签、连接页发送端那一行 */
+"Waiting" = "等待连接";
+"Connecting" = "正在连接";
+"Playing" = "正在播放";
+"Standby" = "待机";
+"Stopped" = "已停止";
+"Reconnecting" = "正在重新连接";
+"Disconnected" = "已断开";
+"Can’t receive" = "无法接收";
+"Can’t play" = "无法播放";
+
+/* 路线上的设备：不知道发送端名字时的占位、没有输出设备 */
+"Windows PC" = "Windows 电脑";
+"No output device" = "没有输出设备";
+
+/* 音频输出打不开，%@ 是系统给的原因 */
+"Can’t open the audio output: %@" = "无法打开音频输出：%@";
+
+/* 概览、声音 */
+"Volume" = "音量";
+"Balance" = "左右";
+"Left" = "左";
+"Right" = "右";
+"Target loudness" = "目标响度";
+"Soft" = "柔和";
+"Standard" = "标准";
+"Loud" = "响亮";
+"Current gain" = "当前增益";
+"Output" = "输出";
+"Sound level from Windows" = "Windows 声音电平";
+
+/* 网络 */
+"Buffer" = "缓冲";
+"Packets received" = "收到";
+"Packet loss" = "丢包";
+"Late packets" = "迟到";
+"Dropouts" = "卡顿";
+"Latency trims" = "跳过";
+"Jitter" = "抖动";
+"Bitrate" = "码率";
+"Clock drift compensation" = "时钟漂移补偿";
+"Clock drift" = "时钟偏差";
+"Measuring…" = "测量中…";
+"Reset Statistics" = "重置统计";
+
+/* 缓冲曲线：只给辅助功能读 */
+"Time" = "时间";
+"Lower limit" = "下限";
+"Target" = "目标";
+"Buffer level over the last minute" = "最近一分钟的缓冲水位";
+
+/* 数量：英文只显示数字 */
+"count.packets" = "%@ 个";
+"count.times" = "%@ 次";
+"count.packetLoss" = "%1$@ 个 · %2$@%%";
+
+/* 连接 */
+"Copy Address" = "复制地址";
+"Port" = "端口";
+"Address" = "地址";
+"Format" = "格式";
+"Time played" = "已播放";
+"%@ · Mono" = "%@ · 单声道";
+"%@ · Stereo" = "%@ · 立体声";
+
+/* 单位 */
+"%@ dB" = "%@ dB";
+"%@%%" = "%@%%";
+"%@ kHz" = "%@ kHz";
+"%@ ms" = "%@ ms";
+"%@ ppm" = "%@ ppm";
+"%@ Mbps" = "%@ Mbps";
+
+/* 路线整体给 VoiceOver 的一句话。“, ”是本机地址之间的分隔符 */
+", " = "、";
+"Waiting for %@ to connect. This Mac is at %@" = "等待 %1$@ 连接，本机地址 %2$@";
+"Waiting for a Windows PC to connect. This Mac is at %@" = "等待 Windows 电脑 连接，本机地址 %@";
+"Connecting to %@" = "正在连接 %@";
+"Sound from %@ is muted" = "%@ 的声音已静音";
+"Playing from %@" = "%@ 到 输出设备，正在播放";
+"Playing from %@ to %@" = "%1$@ 到 %2$@，正在播放";
+"No sound from %@, on standby" = "%@ 没有声音，待机";
+"%@ has stopped sending" = "%@ 已停止发送";
+"Reconnecting to %@" = "正在重新连接 %@";
+"Disconnected from %@" = "%@ 已断开";
+
+/* 系统通知 */
+"Connected to %@" = "%@ 已连接";
+"Playing on %@" = "从 %@ 播放";
+"Reconnected to %@" = "已重新连上 %@";
+"%@ stopped sending" = "%@ 停止发送了";
+"The sound device on %@ was disconnected" = "%@ 的声音设备断开了";
+"Playback will resume when the device is back." = "设备恢复后会自动继续";
+"Lost connection to %@" = "和 %@ 的连接断了";
+"The network is unstable. Trying to reconnect…" = "网络不稳定，正在尝试重新连接…";
+"Couldn’t reconnect to %@" = "没能重新连上 %@";
+"EarPair will connect again when the PC starts sending." = "它再次发送时会自动连上";

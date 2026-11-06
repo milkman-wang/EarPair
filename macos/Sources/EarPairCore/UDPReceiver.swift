@@ -8,12 +8,18 @@ public enum UDPReceiverError: Error, LocalizedError {
     case socketFailed(String)
     case bindFailed(port: UInt16, code: Int32, reason: String)
 
+    /// 端口号先转成文字再放进句子：按数字插值会被加上千位分隔符（“47,800”）
     public var errorDescription: String? {
         switch self {
-        case .socketFailed(let reason): return "无法创建 UDP 套接字：\(reason)"
+        case .socketFailed(let reason):
+            return String(localized: "Can’t create a UDP socket: \(reason)", bundle: .module)
         case .bindFailed(let port, let code, _) where code == EADDRINUSE:
-            return "端口 \(port) 被其他程序占用，收不到 Windows 的声音。"
-        case .bindFailed(let port, _, let reason): return "无法监听端口 \(port)：\(reason)"
+            let number = String(port)
+            return String(localized: "Port \(number) is in use by another app, so EarPair can’t receive sound from Windows.",
+                          bundle: .module)
+        case .bindFailed(let port, _, let reason):
+            let number = String(port)
+            return String(localized: "Can’t listen on port \(number): \(reason)", bundle: .module)
         }
     }
 }

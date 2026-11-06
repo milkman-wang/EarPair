@@ -23,7 +23,7 @@ public static class ControlPacket
 
     public static byte[] Encode(Kind kind, ReadOnlySpan<byte> body)
     {
-        if (HeaderSize + body.Length > MaxSize) throw new ArgumentException("控制包太长", nameof(body));
+        if (HeaderSize + body.Length > MaxSize) throw new ArgumentException(CoreStrings.ControlPacketTooLong, nameof(body));
         var packet = new byte[HeaderSize + body.Length];
         packet[0] = (byte)'E';
         packet[1] = (byte)'A';

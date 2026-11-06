@@ -1,0 +1,2 @@
+/* 本地网络权限对话框里的说明 */
+"NSLocalNetworkUsageDescription" = "EarPair receives sound from Windows PCs on your local network.";

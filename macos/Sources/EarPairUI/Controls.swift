@@ -38,7 +38,7 @@ private struct CircleBackground: ViewModifier {
 
 /// 控制中心式开关：圆钮 + 名称，整块可点
 struct ToggleTile: View {
-    var title: LocalizedStringKey
+    var title: Text
     var systemImage: String
     @Binding var isOn: Bool
 
@@ -48,7 +48,7 @@ struct ToggleTile: View {
         } label: {
             HStack(spacing: 8) {
                 CircleGlyph(systemImage: systemImage, diameter: 28, isOn: isOn, isInteractive: true)
-                Text(title)
+                title
                 Spacer(minLength: 0)
             }
             .contentShape(.rect)
@@ -60,7 +60,7 @@ struct ToggleTile: View {
 
 /// 面板底部的菜单项：整行悬停高亮，和系统菜单一样
 struct MenuRow: View {
-    var title: LocalizedStringKey
+    var title: Text
     var shortcut: String?
     var action: () -> Void
     @State private var hovering = false
@@ -68,7 +68,7 @@ struct MenuRow: View {
     var body: some View {
         Button(action: action) {
             HStack {
-                Text(title)
+                title
                 Spacer()
                 if let shortcut {
                     Text(verbatim: shortcut).foregroundStyle(.tertiary)
@@ -101,9 +101,10 @@ struct VolumeSlider: View {
     var body: some View {
         Group {
             if #available(macOS 26.0, *) {
-                Slider(value: snapping, in: 0...2, label: { Text("音量") }, ticks: { SliderTick(1.0) })
+                Slider(value: snapping, in: 0...2, label: { Text("Volume", bundle: .module) },
+                       ticks: { SliderTick(1.0) })
             } else {
-                Slider(value: snapping, in: 0...2) { Text("音量") }
+                Slider(value: snapping, in: 0...2) { Text("Volume", bundle: .module) }
             }
         }
         .labelsHidden()
@@ -128,17 +129,17 @@ struct BalanceSlider: View {
         Group {
             if #available(macOS 26.0, *) {
                 Slider(value: snapping, in: -1...1, neutralValue: 0,
-                       label: { Text("左右") },
-                       minimumValueLabel: { Text("左") },
-                       maximumValueLabel: { Text("右") },
+                       label: { Text("Balance", bundle: .module) },
+                       minimumValueLabel: { Text("Left", bundle: .module) },
+                       maximumValueLabel: { Text("Right", bundle: .module) },
                        ticks: { SliderTick(0.0) })
             } else {
                 Slider(value: snapping, in: -1...1) {
-                    Text("左右")
+                    Text("Balance", bundle: .module)
                 } minimumValueLabel: {
-                    Text("左")
+                    Text("Left", bundle: .module)
                 } maximumValueLabel: {
-                    Text("右")
+                    Text("Right", bundle: .module)
                 }
             }
         }

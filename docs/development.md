@@ -34,16 +34,20 @@ macos/                      Swift package (macOS 14+)
   Sources/EarPair/          app entry point
   Sources/earpair-recv/     command-line receiver
   Sources/earpair-snapshot/ renders the UI to PNG files
+  Sources/*/Resources/      Simplified Chinese strings (zh-Hans.lproj)
+  Resources/                Info.plist, icon, localized Local Network text
   Tests/EarPairCoreTests/   unit tests and long-running simulations
   scripts/build-app.sh      builds EarPair.app
+  scripts/check-strings.sh  checks that every UI string has a translation
 windows/                    .NET 10
   EarPair.Sender.Core/      capture, conversion, packets, UDP, control packets, local mute
   EarPair.App/              WinUI 3 tray app (Windows App SDK 2.6, unpackaged, self-contained)
   EarPair.Sender/           command-line sender
   EarPair.Sender.SelfTest/  self-test (runs on macOS too)
+  */Strings*.resx           UI strings: English and Simplified Chinese
   build.ps1                 packages the zips and single-file executables
 tools/                      test sender, recording analysis, end-to-end test, icon generator
-docs/                       this page and README images
+docs/                       this page, the localization guide and README images
 ```
 
 ## Building
@@ -59,6 +63,7 @@ cd macos
 
 - Always package with this script rather than copying the `swift build` output. SwiftPM records the minimum macOS version as the SDK version, which makes macOS run the app in compatibility mode (old style, no Liquid Glass); the script stamps the real SDK version with `vtool`.
 - The app is ad-hoc signed by default. macOS identifies apps by signature for the Local Network permission, so every rebuild asks again. With an Apple Development certificate: `SIGN_IDENTITY="Apple Development: …" ./scripts/build-app.sh`.
+- The script builds with Swift Build (`--build-system swiftbuild`) and copies the SwiftPM resource bundles and the `.lproj` folders into `Contents/Resources`, where the app finds its translations.
 - If `swift build` fails with an llbuild / dyld error, the selected Command Line Tools don't match the SDK. The script switches to the Xcode in `/Applications` automatically, or set `DEVELOPER_DIR` yourself.
 
 ### Windows
@@ -69,7 +74,7 @@ Requires Windows 10 (version 2004) or later and the [.NET 10 SDK](https://dotnet
 powershell -ExecutionPolicy Bypass -File windows\build.ps1
 ```
 
-This writes `EarPair-<version>-win-x64.zip`, `…-win-arm64.zip` and the single-file command-line senders to `dist\`. The zips include the .NET runtime and the Windows App SDK. Before zipping, the script checks the publish folder (runtime included, `.pri` present, no stray AI components) and fails if something is off.
+This writes `EarPair-<version>-win-x64.zip`, `…-win-arm64.zip` and the single-file command-line senders to `dist\`. The zips include the .NET runtime and the Windows App SDK. Before zipping, the script checks the publish folder (runtime included, `.pri` present, Simplified Chinese strings present, no stray AI components) and fails if something is off.
 
 ## Testing
 
@@ -78,8 +83,10 @@ swift test --package-path macos                           # Mac unit tests (add 
 dotnet run --project windows/EarPair.Sender.SelfTest      # Windows sender self-test; runs on macOS too
 dotnet run --project windows/EarPair.Sender.SelfTest -- hello 127.0.0.1   # HELLO → STATUS round trip with a receiver
 tools/e2e.sh                                              # end to end over real UDP, recorded and analyzed (needs numpy)
+macos/scripts/check-strings.sh                            # every Mac UI string has a translation, placeholders match
 ```
 
+- The Windows self-test also checks the UI strings: keys match one to one in every language, placeholders agree, and English and Simplified Chinese both resolve.
 - The unit tests include 30-minute clock-drift simulations (±200 ppm), packet loss and reordering, loudness leveling and the limiter, and the control packets (byte-exact test vectors shared with the C# side).
 - `tools/e2e.sh` runs three rounds of about 30 seconds: clock drift, a bad network, and the C# packet code feeding the Swift receiver. The last round is skipped without .NET.
 
@@ -94,15 +101,17 @@ python3 tools/test_sender.py 127.0.0.1 --clock-ppm 200 --jitter-ms 8 --loss 1 --
 
 ### Checking the UI
 
-- Mac: `swift run --package-path macos -c release earpair-snapshot <folder>` renders the menu bar panel and the window's overview in every state, plus the other window pages while waiting and playing, in light and dark. Offscreen rendering can't draw Liquid Glass, so these use the macOS 14/15 style. With `--readme` before the folder, it renders the Mac screenshots in `docs/images`.
+- Mac: `swift run --package-path macos -c release earpair-snapshot <folder>` renders the menu bar panel and the window's overview in every state, plus the other window pages while waiting and playing, in light and dark. Offscreen rendering can't draw Liquid Glass, so these use the macOS 14/15 style. Add `--lang <code>` (`en`, `zh-Hans`) to pick the language; without it the tool follows the system. README screenshots: `earpair-snapshot --readme --lang en docs/images` and `earpair-snapshot --readme --lang zh-Hans docs/images/zh-CN`.
 - Windows: Debug builds have a demo mode that draws each state from fake data, with no capture and no network:
 
   ```powershell
   dotnet build windows\EarPair.App -c Debug -r win-x64 -p:Platform=x64
-  windows\EarPair.App\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\EarPair.exe --demo playing --theme dark
+  windows\EarPair.App\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\EarPair.exe --demo playing --theme dark --lang en
   ```
 
-  States: `pick` `off` `connecting` `playing` `standby` `muted` `legacy` `noresponse` `waiting` `busy` `nosource` `failed` `postmute`.
+  `--lang en` or `--lang zh-Hans` picks the UI language (it works in Release builds too; `--demo` is Debug-only). States: `pick` `off` `connecting` `playing` `standby` `muted` `legacy` `noresponse` `waiting` `busy` `nosource` `failed` `postmute`.
+
+Adding a language: see [localization.md](localization.md).
 
 Icons are generated by `tools/make-icons.swift` (Windows `.ico` and tray icons, Mac `.icns`).
 
@@ -118,7 +127,7 @@ The command-line sender doesn't discover Macs and doesn't mute the PC's speakers
 ## Logs
 
 - Mac: `log stream --level info --predicate 'subsystem == "app.earpair"'` (Bonjour, UDP, notifications and reopen events).
-- Windows: `%LOCALAPPDATA%\EarPair\logs`, kept for 7 days. In the window: **⋯ → 打开日志文件夹** (open log folder).
+- Windows: `%LOCALAPPDATA%\EarPair\logs`, kept for 7 days. In the window: **⋯ → Open log folder**.
 
 ## Known limitations
 

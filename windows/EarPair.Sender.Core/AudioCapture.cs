@@ -32,8 +32,8 @@ public sealed class AudioCapture : IDisposable
         _converter = new PcmConverter(format);
         SampleRate = format.SampleRate;
         ChannelCount = format.Channels;
-        string kind = PcmConverter.IsFloat(format) ? "浮点" : "整数";
-        FormatDescription = $"{format.SampleRate} Hz，{format.Channels} 声道，{format.BitsPerSample}-bit {kind}";
+        FormatDescription = CoreStrings.FormatDescription(format.SampleRate, format.Channels, format.BitsPerSample,
+                                                          PcmConverter.IsFloat(format));
 
         _capture.DataAvailable += OnDataAvailable;
         _capture.RecordingStopped += (_, e) => Stopped?.Invoke(e.Exception);

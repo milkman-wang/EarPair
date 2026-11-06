@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>EarPair.Sender</RootNamespace>
+    <!-- Strings.resx 是英文；中文在 Strings.zh-Hans.resx（卫星程序集） -->
+    <NeutralLanguage>en</NeutralLanguage>
     <!-- 允许在 Mac / Linux 上编译检查（运行仍然需要 Windows） -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>

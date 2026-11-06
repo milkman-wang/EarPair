@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 命令行版的文字（英文，原文）。中文在 Strings.zh-Hans.resx；术语见 docs/localization.md -->
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="Usage" xml:space="preserve">
+    <value>Usage: EarPair.Sender &lt;Mac IP address&gt; [options]
+
+  --port N          UDP port of the Mac receiver (default 47800)
+  --device NAME     Output device to capture; any part of its name works (default: the system default output device)
+  --list-devices    List all output devices
+  --frames N        Frames per packet (default 240, which is 5 ms at 48 kHz; at most 360)
+  --no-keepalive    Don't play silence to keep capture going (when Windows is silent, sending stops and the Mac shows Disconnected)
+  -h, --help        Show help
+
+Example: EarPair.Sender 192.168.1.20</value>
+    <comment>选项名（--port 等）和示例不翻译；说明对齐到第 19 列</comment>
+  </data>
+
+  <!-- 参数错误 -->
+  <data name="NeedsValue" xml:space="preserve">
+    <value>{0} needs a value</value>
+    <comment>{0}：选项名</comment>
+  </data>
+  <data name="MustBeInteger" xml:space="preserve">
+    <value>{0} must be a whole number from {1} to {2}</value>
+    <comment>{0}：选项名，{1}–{2}：范围</comment>
+  </data>
+  <data name="UnknownArgument" xml:space="preserve">
+    <value>Unknown argument: {0}</value>
+  </data>
+
+  <!-- 运行时的输出 -->
+  <data name="DeviceListHeader" xml:space="preserve">
+    <value>Output devices (* = current default):</value>
+  </data>
+  <data name="HostMissing" xml:space="preserve">
+    <value>Specify the Mac's local network IP address (EarPair shows it in the Mac menu bar).</value>
+  </data>
+  <data name="DeviceNotFound" xml:space="preserve">
+    <value>No output device has "{0}" in its name. Use --list-devices to see them all.</value>
+    <comment>{0}：用户给的设备名片段</comment>
+  </data>
+  <data name="Error" xml:space="preserve">
+    <value>Something went wrong: {0}</value>
+  </data>
+  <data name="Banner" xml:space="preserve">
+    <value>EarPair sender {0}</value>
+    <comment>{0}：版本</comment>
+  </data>
+  <data name="Standby" xml:space="preserve">
+    <value>Standby: no sound, audio paused, handshake kept</value>
+  </data>
+  <data name="Resumed" xml:space="preserve">
+    <value>Sending resumed</value>
+  </data>
+  <data name="CaptureDevice" xml:space="preserve">
+    <value>Capture device: {0}</value>
+  </data>
+  <data name="CaptureDeviceDefault" xml:space="preserve">
+    <value>Capture device: {0} (follows the system default)</value>
+  </data>
+  <data name="CaptureFormat" xml:space="preserve">
+    <value>Capture format: {0}</value>
+  </data>
+  <data name="SendingTo" xml:space="preserve">
+    <value>Sending: {0} Hz stereo 16-bit → {1}:{2}, {3} frames per packet</value>
+    <comment>{0}：采样率，{1}:{2}：Mac 的地址和端口，{3}：每包帧数（16–360）</comment>
+  </data>
+  <data name="MultichannelTip" xml:space="preserve">
+    <value>Tip: This output device is multichannel and has been mixed down to stereo. For better results, set it to stereo in Windows Sound settings.</value>
+  </data>
+  <data name="WaitingForDevice" xml:space="preserve">
+    <value>Waiting for the output device… (continues automatically when it's back)</value>
+  </data>
+  <data name="FailedRetrying" xml:space="preserve">
+    <value>Something went wrong: {0} (retrying shortly)</value>
+  </data>
+  <data name="NoKeepAliveTip" xml:space="preserve">
+    <value>Tip: Without the silent keepalive, sending stops when Windows is silent and the Mac shows Disconnected.</value>
+  </data>
+  <data name="PressCtrlC" xml:space="preserve">
+    <value>Press Ctrl+C to stop.</value>
+  </data>
+  <data name="Progress" xml:space="preserve">
+    <value>[{0}] Packets sent: {1}, {2} kbps, send errors: {3}</value>
+    <comment>{0}：已运行时间，{1}：包数，{2}：码率，{3}：发送失败次数</comment>
+  </data>
+  <data name="Stopped" xml:space="preserve">
+    <value>Stopped.</value>
+  </data>
+</root>

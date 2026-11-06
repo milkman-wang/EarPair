@@ -13,17 +13,18 @@
       <TextBlock Grid.Column="1" Text="EarPair" VerticalAlignment="Center" Style="{StaticResource CaptionTextBlockStyle}" />
       <Button x:Name="MoreButton" Grid.Column="2" Width="40" Height="32" Padding="0" Margin="0,0,4,0"
               VerticalAlignment="Center" Style="{StaticResource SubtleButtonStyle}"
-              ToolTipService.ToolTip="更多" AutomationProperties.Name="更多">
+              ToolTipService.ToolTip="{x:Bind local:Strings.More}"
+              AutomationProperties.Name="{x:Bind local:Strings.More}">
         <FontIcon Glyph="&#xE712;" FontSize="16" />
         <Button.Flyout>
           <MenuFlyout Placement="BottomEdgeAlignedRight">
-            <MenuFlyoutItem Text="打开日志文件夹" Click="OnOpenLogs">
+            <MenuFlyoutItem Text="{x:Bind local:Strings.OpenLogFolder}" Click="OnOpenLogs">
               <MenuFlyoutItem.Icon>
                 <FontIcon Glyph="&#xE838;" />
               </MenuFlyoutItem.Icon>
             </MenuFlyoutItem>
             <MenuFlyoutSeparator />
-            <MenuFlyoutItem Text="退出 EarPair" Click="OnQuit" />
+            <MenuFlyoutItem Text="{x:Bind local:Strings.ExitEarPair}" Click="OnQuit" />
           </MenuFlyout>
         </Button.Flyout>
       </Button>
@@ -47,7 +48,7 @@
               <TextBlock x:Name="StatusTitle" VerticalAlignment="Center"
                          Style="{StaticResource SubtitleTextBlockStyle}" AutomationProperties.LiveSetting="Polite" />
               <ToggleSwitch x:Name="SendSwitch" Grid.Column="1" VerticalAlignment="Center"
-                            AutomationProperties.Name="发送" Toggled="OnSendToggled" />
+                            AutomationProperties.Name="{x:Bind local:Strings.Send}" Toggled="OnSendToggled" />
             </Grid>
 
             <controls:SignalPath x:Name="Route" Margin="0,24,0,0" />
@@ -55,11 +56,13 @@
             <!-- 还没选过 Mac：发现列表 -->
             <StackPanel x:Name="Picker" Visibility="Collapsed" Spacing="8">
               <Grid MinHeight="40" ColumnDefinitions="*,Auto">
-                <TextBlock Text="选择 Mac" VerticalAlignment="Center" Style="{StaticResource SubtitleTextBlockStyle}" />
+                <TextBlock Text="{x:Bind local:Strings.ChooseMac}" VerticalAlignment="Center"
+                           Style="{StaticResource SubtitleTextBlockStyle}" />
                 <ProgressRing x:Name="PickerRing" Grid.Column="1" Width="16" Height="16" IsActive="True" />
                 <Button x:Name="RescanButton" Grid.Column="1" Visibility="Collapsed" Click="OnRescan"
                         Style="{StaticResource SubtleButtonStyle}" Padding="8"
-                        ToolTipService.ToolTip="重新查找" AutomationProperties.Name="重新查找">
+                        ToolTipService.ToolTip="{x:Bind local:Strings.SearchAgain}"
+                        AutomationProperties.Name="{x:Bind local:Strings.SearchAgain}">
                   <FontIcon Glyph="&#xE72C;" FontSize="14" />
                 </Button>
               </Grid>
@@ -83,9 +86,10 @@
               </ListView>
               <StackPanel x:Name="EmptyState" Visibility="Collapsed" Spacing="8" Padding="0,16">
                 <FontIcon Glyph="&#xE7F8;" FontSize="48" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                <TextBlock Text="没有找到 Mac" HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <TextBlock Text="{x:Bind local:Strings.NoMacsFound}" HorizontalAlignment="Center"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
               </StackPanel>
-              <HyperlinkButton Content="输入地址" Padding="0" Click="OnEnterAddress" />
+              <HyperlinkButton Content="{x:Bind local:Strings.EnterAddress}" Padding="0" Click="OnEnterAddress" />
             </StackPanel>
 
             <InfoBar x:Name="Notice" Margin="0,20,0,0" IsOpen="False" IsClosable="False" Visibility="Collapsed"
@@ -97,8 +101,9 @@
           </StackPanel>
         </Border>
 
-        <controls:SettingsRow x:Name="TargetRow" Glyph="&#xE7F8;" Header="发送到">
-          <DropDownButton x:Name="TargetButton" Width="300" HorizontalContentAlignment="Left" AutomationProperties.Name="发送到"
+        <controls:SettingsRow x:Name="TargetRow" Glyph="&#xE7F8;" Header="{x:Bind local:Strings.SendTo}">
+          <DropDownButton x:Name="TargetButton" Width="300" HorizontalContentAlignment="Left"
+                          AutomationProperties.Name="{x:Bind local:Strings.SendTo}"
                           SizeChanged="OnTargetButtonSizeChanged">
             <DropDownButton.Flyout>
               <MenuFlyout x:Name="TargetMenu" Placement="BottomEdgeAlignedRight" Opening="OnTargetMenuOpening" />
@@ -106,12 +111,13 @@
           </DropDownButton>
         </controls:SettingsRow>
 
-        <controls:SettingsRow Glyph="&#xE7F5;" Header="声音来源">
+        <controls:SettingsRow Glyph="&#xE7F5;" Header="{x:Bind local:Strings.SoundSource}">
           <!-- 定宽：打开时选中项会挪进列表，不定宽的话框会缩到 MinWidth，列表就按缩小后的框定位，和原来的框对不上。
                列表默认按最长的设备名撑宽（还会伸出窗口），打开动画却是从框本身展开的；把每一项限制在框宽以内，
                列表就和框一样宽（WinUI 保证列表不窄于框），长名字截断、悬停看全名。
                288 = 框宽 300 − 列表边框 2 − 项左右外边距 5×2 -->
-          <ComboBox x:Name="DeviceBox" Width="300" AutomationProperties.Name="声音来源" SelectionChanged="OnDeviceChanged">
+          <ComboBox x:Name="DeviceBox" Width="300" AutomationProperties.Name="{x:Bind local:Strings.SoundSource}"
+                    SelectionChanged="OnDeviceChanged">
             <ComboBox.ItemContainerStyle>
               <Style TargetType="ComboBoxItem" BasedOn="{StaticResource DefaultComboBoxItemStyle}">
                 <Setter Property="MaxWidth" Value="288" />
@@ -125,12 +131,14 @@
           </ComboBox>
         </controls:SettingsRow>
 
-        <controls:SettingsRow Glyph="&#xE74F;" Header="发送时本机静音">
-          <ToggleSwitch x:Name="MuteSwitch" AutomationProperties.Name="发送时本机静音" Toggled="OnMuteToggled" />
+        <controls:SettingsRow Glyph="&#xE74F;" Header="{x:Bind local:Strings.MuteWhileSending}">
+          <ToggleSwitch x:Name="MuteSwitch" AutomationProperties.Name="{x:Bind local:Strings.MuteWhileSending}"
+                        Toggled="OnMuteToggled" />
         </controls:SettingsRow>
 
-        <controls:SettingsRow Glyph="&#xE7E8;" Header="开机时启动">
-          <ToggleSwitch x:Name="StartupSwitch" AutomationProperties.Name="开机时启动" Toggled="OnStartupToggled" />
+        <controls:SettingsRow Glyph="&#xE7E8;" Header="{x:Bind local:Strings.StartAtLogin}">
+          <ToggleSwitch x:Name="StartupSwitch" AutomationProperties.Name="{x:Bind local:Strings.StartAtLogin}"
+                        Toggled="OnStartupToggled" />
         </controls:SettingsRow>
       </StackPanel>
     </ScrollViewer>

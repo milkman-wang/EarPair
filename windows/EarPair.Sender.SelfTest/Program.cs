@@ -1,11 +1,14 @@
 // EarPair 发送端自检，不需要 Windows 和声卡：
-//   dotnet run                              检查格式转换、打包、参数解析
+//   dotnet run                              检查格式转换、打包、参数解析、界面文字（英文和简体中文）
 //   dotnet run -- send <IP> [秒数] [端口]    用发送端的转换和打包代码发 440 Hz 测试音
 //                                           （模拟 WASAPI：48 kHz 立体声浮点，每 10 ms 一块）
 //   dotnet run -- hello <IP> [端口]          发 HELLO，等接收端回 STATUS（检查两端的控制包实现一致）
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Globalization;
+using System.Reflection;
+using System.Resources;
+using System.Text.RegularExpressions;
 using EarPair.Sender;
 using NAudio.Wave;
 
@@ -20,6 +23,7 @@ TestPacketEncoder();
 TestPcmConverter();
 TestOptions();
 TestControlPacket();
+TestStrings();
 Console.WriteLine(failures == 0 ? "全部通过" : $"{failures} 项没通过");
 return failures == 0 ? 0 : 1;
 
@@ -172,6 +176,126 @@ void TestControlPacket()
     Check(ControlPacket.ParseStatus(wrongVersion) is null, "版本不对的包丢掉");
     Check(ControlPacket.ParseStatus(hello) is null, "HELLO 不会被当成 STATUS");
 }
+
+void TestStrings()
+{
+    Console.WriteLine("界面文字：");
+    CultureInfo en = CultureInfo.GetCultureInfo("en"), zh = CultureInfo.GetCultureInfo("zh-Hans");
+    Check(In(en, () => EarPair.App.Strings.StatusPlaying) == "Playing" &&
+          In(zh, () => EarPair.App.Strings.StatusPlaying) == "正在播放",
+          "en 和 zh-Hans 都取得到界面文字（正在播放 / Playing）");
+    Check(In(CultureInfo.GetCultureInfo("ja"), () => EarPair.App.Strings.StatusPlaying) == "Playing" &&
+          In(CultureInfo.InvariantCulture, () => EarPair.App.Strings.StatusPlaying) == "Playing",
+          "其他语言和不变区域用英文");
+    Check(In(en, () => CoreStrings.HostNotFound("mac.local")) == "Can't find mac.local" &&
+          In(zh, () => CoreStrings.HostNotFound("mac.local")) == "找不到 mac.local",
+          "引擎的错误带参数（找不到 mac.local）");
+    Check(In(en, () => CoreStrings.FormatDescription(48000, 2, 32, isFloat: true)) == "48000 Hz, 2-channel, 32-bit float" &&
+          In(zh, () => CoreStrings.FormatDescription(44100, 6, 24, isFloat: false)) == "44100 Hz，6 声道，24-bit 整数",
+          "采集格式（浮点、整数）");
+    Check(In(en, () => EarPair.App.Strings.BusyPlaying(null)) == "Playing sound from another PC" &&
+          In(zh, () => EarPair.App.Strings.BusyPlaying("LAPTOP-Q8")) == "正在播放 LAPTOP-Q8 的声音",
+          "Mac 正忙的提示（不知道是哪台电脑时说“另一台电脑”）");
+    Check(In(en, () => CliStrings.Usage).StartsWith("Usage: EarPair.Sender <Mac IP address>", StringComparison.Ordinal) &&
+          In(zh, () => CliStrings.Usage).StartsWith("用法：EarPair.Sender <Mac 的 IP>", StringComparison.Ordinal),
+          "命令行帮助");
+    Check(In(en, () => EarPair.App.Strings.ControlLanguage) == "en-US" &&
+          In(zh, () => EarPair.App.Strings.ControlLanguage) == "zh-CN",
+          "WinUI 控件自带的文字和界面用同一种语言");
+
+    // 每种语言的 .resx 和英文的键一一对应、占位符一致。查的是编译出来的资源（卫星程序集），新加的语言也会查到
+    string[] cultures = Directory.GetDirectories(AppContext.BaseDirectory)
+        .Where(dir => File.Exists(Path.Combine(dir, "EarPair.Sender.SelfTest.resources.dll")))
+        .Select(dir => Path.GetFileName(dir)!)
+        .Order(StringComparer.Ordinal)
+        .ToArray();
+    Check(cultures.Contains("zh-Hans"), $"有简体中文的卫星程序集（{string.Join("、", cultures)}）");
+    foreach (Type type in new[] { typeof(CoreStrings), typeof(CliStrings), typeof(EarPair.App.Strings) })
+    {
+        var resources = new ResourceManager(type);
+        Dictionary<string, string> neutral = Entries(resources, CultureInfo.InvariantCulture)!;
+        foreach (string culture in cultures)
+        {
+            Dictionary<string, string>? translated = Entries(resources, CultureInfo.GetCultureInfo(culture));
+            var problems = new List<string>();
+            if (translated is null)
+            {
+                problems.Add("没有这种语言的 .resx");
+            }
+            else
+            {
+                problems.AddRange(neutral.Keys.Except(translated.Keys).Select(key => $"缺 {key}"));
+                problems.AddRange(translated.Keys.Except(neutral.Keys).Select(key => $"多了 {key}"));
+                problems.AddRange(neutral.Keys.Intersect(translated.Keys)
+                    .Where(key => !Placeholders(neutral[key]).SetEquals(Placeholders(translated[key])))
+                    .Select(key => $"{key} 的占位符不一致"));
+            }
+            Check(problems.Count == 0, $"{type.Name}：{culture} 和英文的键一一对应，占位符一致" +
+                                       (problems.Count > 0 ? $"（{string.Join("，", problems)}）" : ""));
+        }
+
+        // 访问类里的每一项在两种语言里都取得到，而且不一样：键名写错时两边取到的都是键名，格式不对时会抛异常
+        var broken = new List<string>();
+        foreach (MemberInfo member in type.GetMembers(BindingFlags.Public | BindingFlags.Static))
+        {
+            // 方法用样例参数调用；有 bool 参数的两种取值都试（比如采集格式的浮点和整数）
+            Func<string>[] calls = member switch
+            {
+                PropertyInfo property => [() => (string)property.GetValue(null)!],
+                MethodInfo { IsSpecialName: false } method when method.ReturnType == typeof(string) =>
+                    (method.GetParameters().Any(p => p.ParameterType == typeof(bool)) ? [true, false] : new[] { true })
+                    .Select(flag => (Func<string>)(() => (string)method.Invoke(
+                        null, method.GetParameters().Select(p => Sample(p.ParameterType, flag)).ToArray())!))
+                    .ToArray(),
+                _ => [],
+            };
+            foreach (Func<string> call in calls)
+            {
+                try
+                {
+                    if (In(en, call) == In(zh, call)) broken.Add(member.Name);
+                }
+                catch (TargetInvocationException ex)
+                {
+                    broken.Add($"{member.Name}（{ex.InnerException?.GetType().Name}）");
+                }
+            }
+        }
+        Check(broken.Count == 0, $"{type.Name} 的每一项都有英文和中文" +
+                                 (broken.Count > 0 ? $"（{string.Join("，", broken.Distinct())}）" : ""));
+    }
+}
+
+static string In(CultureInfo culture, Func<string> text)
+{
+    CultureInfo saved = CultureInfo.CurrentUICulture;
+    CultureInfo.CurrentUICulture = culture;
+    try
+    {
+        return text();
+    }
+    finally
+    {
+        CultureInfo.CurrentUICulture = saved;
+    }
+}
+
+/// <summary>只取这种语言自己的 .resx 里的条目（不回退到上一级语言）；没有这种语言时返回 null</summary>
+static Dictionary<string, string>? Entries(ResourceManager resources, CultureInfo culture) =>
+    resources.GetResourceSet(culture, createIfNotExists: true, tryParents: false)?
+        .Cast<System.Collections.DictionaryEntry>()
+        .ToDictionary(entry => (string)entry.Key, entry => entry.Value as string ?? "");
+
+static HashSet<string> Placeholders(string text) =>
+    Regex.Matches(text, @"\{\d+(,[^}:]*)?(:[^}]*)?\}").Select(match => match.Value).ToHashSet();
+
+static object Sample(Type type, bool flag) =>
+    type == typeof(string) || type == typeof(object) ? "x" :
+    type == typeof(int) ? 1 :
+    type == typeof(uint) ? 1u :
+    type == typeof(long) ? 1L :
+    type == typeof(bool) ? flag :
+    throw new NotSupportedException(type.Name);
 
 static short[] Convert(WaveFormat format, byte[] bytes)
 {

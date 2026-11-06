@@ -5,7 +5,7 @@ using EarPair.Sender;
 namespace EarPair.App;
 
 /// <summary>
-/// --demo &lt;状态&gt; [--theme light|dark]：不创建引擎线程以外的任何东西（不采集、不托盘、不扫描、不写设置），
+/// --demo &lt;状态&gt; [--theme light|dark] [--lang en|zh-Hans]：不创建引擎线程以外的任何东西（不采集、不托盘、不扫描、不写设置），
 /// 用假数据把主窗口的各种状态画出来，在虚拟机里截图检查（相当于 Mac 的 earpair-snapshot）。只在 Debug 构建里有。
 /// </summary>
 internal static class Demo
@@ -37,11 +37,15 @@ internal static class Demo
             Name = mac.Name, Kind = "laptop", State = "playing", Output = "AirPods Pro", Transport = "bluetooth",
         };
         const float loud = 0.25f; // −12 dBFS
+        // 设备名是 Windows 给的，跟着系统语言：截图里按界面语言给一个像样的
+        string device = Strings.ControlLanguage.StartsWith("zh", StringComparison.Ordinal)
+            ? "扬声器 (Realtek(R) Audio)" : "Speakers (Realtek(R) Audio)";
+        string format = CoreStrings.FormatDescription(48000, 2, 32, isFloat: true);
 
         SenderSnapshot Snapshot(SenderState state, RemoteHealth health = RemoteHealth.Unknown, StatusMessage? remote = null,
                                 string? error = null, bool fresh = false, bool unreachable = false, bool postMute = false,
                                 bool standby = false) =>
-            new(state, error, "demo", "扬声器 (Realtek(R) Audio)", "48000 Hz，2 声道，32-bit 浮点", 48000, 2, 0, 0, 0, settings)
+            new(state, error, "demo", device, format, 48000, 2, 0, 0, 0, settings)
             {
                 Health = health, Remote = remote, Fresh = fresh, PortUnreachable = unreachable, PostMuteFallback = postMute,
                 Standby = standby,
@@ -64,7 +68,7 @@ internal static class Demo
             "busy" => new Scene(Snapshot(SenderState.WaitingForMac, RemoteHealth.Busy,
                                          playing with { State = "busy", BusyName = "LAPTOP-Q8" }), true, mac, 0),
             "nosource" => new Scene(Snapshot(SenderState.WaitingForDevice), true, mac, 0),
-            "failed" => new Scene(Snapshot(SenderState.Failed, error: "找不到 macbook-air.local"), true, mac, 0),
+            "failed" => new Scene(Snapshot(SenderState.Failed, error: CoreStrings.HostNotFound("macbook-air.local")), true, mac, 0),
             "postmute" => new Scene(Snapshot(SenderState.Sending, RemoteHealth.Ok, playing, postMute: true), true, mac, loud),
             _ => null,
         };

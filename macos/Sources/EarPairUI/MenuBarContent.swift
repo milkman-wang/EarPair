@@ -26,16 +26,18 @@ public struct MenuBarContent: View {
             }
             VolumeRow(controller: controller, style: .panel).padding(.top, 14)
             HStack(spacing: 8) {
-                ToggleTile(title: "静音", systemImage: "speaker.slash.fill", isOn: $controller.muted)
-                ToggleTile(title: "音量平衡", systemImage: "wand.and.stars", isOn: $controller.autoLevel)
+                ToggleTile(title: Text("Mute", bundle: .module), systemImage: "speaker.slash.fill",
+                           isOn: $controller.muted)
+                ToggleTile(title: Text("Auto level", bundle: .module), systemImage: "wand.and.stars",
+                           isOn: $controller.autoLevel)
             }
             .padding(.top, 12)
             Divider().padding(.vertical, 8)
-            MenuRow(title: "打开 EarPair") {
+            MenuRow(title: Text("Open EarPair", bundle: .module)) {
                 NSApp.activate()
                 openWindow(id: MainWindow.id)
             }
-            MenuRow(title: "退出 EarPair", shortcut: "⌘Q") {
+            MenuRow(title: Text("Quit EarPair", bundle: .module), shortcut: "⌘Q") {
                 NSApplication.shared.terminate(nil)
             }
             .keyboardShortcut("q")

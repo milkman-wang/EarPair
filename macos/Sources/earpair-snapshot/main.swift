@@ -6,15 +6,50 @@ import SwiftUI
 // 把菜单栏面板和主窗口各页渲染成 PNG，检查各种状态的布局。
 // 离屏渲染画不出 Liquid Glass（含玻璃的整块会变成空白），所以这里一律用 macOS 14 / 15 的样式，
 // 玻璃效果要看真实窗口。
-// 用法：earpair-snapshot [输出目录]
-//       earpair-snapshot --readme [输出目录]   只渲染 README 用的几张图，设备名用通用的名字
+// 用法：earpair-snapshot [--lang 语言] [输出目录]
+//       earpair-snapshot --readme [--lang 语言] [输出目录]   只渲染 README 用的几张图，设备名用通用的名字
+// --lang：界面用哪种语言（en、zh-Hans……），不填就跟系统语言
 
 setenv("EARPAIR_LEGACY_STYLE", "1", 1)
 
-let readmeMode = CommandLine.arguments.contains("--readme")
-let outputDirectory = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first { $0 != "--readme" } ?? "snapshots",
-                          isDirectory: true)
+var readmeMode = false
+var language: String?
+var outputPath: String?
+var arguments = CommandLine.arguments.dropFirst()
+while let argument = arguments.popFirst() {
+    switch argument {
+    case "--readme": readmeMode = true
+    case "--lang":
+        guard let value = arguments.popFirst(), !value.hasPrefix("-") else {
+            FileHandle.standardError.write(Data("--lang 后面要跟语言代码，比如 en、zh-Hans\n".utf8))
+            exit(2)
+        }
+        language = value
+    case let option where option.hasPrefix("-"):
+        FileHandle.standardError.write(Data("不认识的选项：\(option)\n".utf8))
+        exit(2)
+    default: outputPath = argument
+    }
+}
+// README 的图分中英文两套，放在不同目录：不指定语言就会跟着系统语言写错地方
+if readmeMode && language == nil {
+    FileHandle.standardError.write(Data("--readme 要指定 --lang：en 渲染到 docs/images，zh-Hans 渲染到 docs/images/zh-CN\n".utf8))
+    exit(2)
+}
+// 必须在任何 Bundle 查找之前：整个进程（包括 EarPairUI、EarPairCore 的资源包和系统框架）都按这个语言找文字。
+// 命令行工具链接了一份允许混合本地化的 Info.plist（Package.swift），资源包才会按这个设置选翻译
+if let language {
+    var domain = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+    domain["AppleLanguages"] = [language]
+    UserDefaults.standard.setVolatileDomain(domain, forName: UserDefaults.argumentDomain)
+}
+let outputDirectory = URL(fileURLWithPath: outputPath ?? "snapshots", isDirectory: true)
 try? FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+
+/// 渲染出来的界面是不是中文：截图里那些不归界面管的文字（设备名、系统给的出错原因）跟着换
+let chinese = Bundle.preferredLocalizations(from: ["en", "zh-Hans"]).first == "zh-Hans"
+/// 系统按语言给设备起的名字：“milkman的MacBook Air”“milkman’s MacBook Air”
+let owner = chinese ? "milkman的" : "milkman’s "
 
 let application = NSApplication.shared
 application.setActivationPolicy(.prohibited)
@@ -83,9 +118,11 @@ let scenarios = [
     Scenario(name: "reconnecting", stats: ended(.network), link: .reconnecting, hasSound: false),
     Scenario(name: "disconnected", stats: ended(.network), link: .disconnected, hasSound: false),
     Scenario(name: "receive-failed", stats: ReceiverStats(),
-             link: .receiveFailed("端口 47800 被其他程序占用，收不到 Windows 的声音。"), hasSound: false),
+             link: .receiveFailed(UDPReceiverError.bindFailed(port: ReceiverController.port, code: EADDRINUSE,
+                                                              reason: "").localizedDescription),
+             hasSound: false),
     Scenario(name: "output-failed", stats: streaming(.playing, input: -17.6, output: -120),
-             link: .outputFailed("无法打开音频输出：设备不可用")),
+             link: .outputFailed(ReceiverController.outputFailureMessage(chinese ? "设备不可用" : "Device unavailable"))),
 ]
 
 @MainActor
@@ -96,7 +133,9 @@ func controller(for scenario: Scenario) -> ReceiverController {
                               history: hasSender ? history(sound: scenario.hasSound) : [],
                               linkState: scenario.link, hasSound: scenario.hasSound,
                               senderName: hasSender ? "DESKTOP-7Q2" : nil, senderKind: hasSender ? .desktop : nil,
-                              lastSenderName: scenario.lastName, lastSenderKind: scenario.lastKind)
+                              lastSenderName: scenario.lastName, lastSenderKind: scenario.lastKind,
+                              macName: owner + "MacBook Air",
+                              outputDevice: OutputDevice(name: owner + "AirPods Pro", transport: .bluetooth))
 }
 
 /// keepingTop：只保留上面这么高（pt）的部分

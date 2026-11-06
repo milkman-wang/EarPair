@@ -24,6 +24,8 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
     <SatelliteResourceLanguages>zh-Hans;en</SatelliteResourceLanguages>
+    <!-- Strings.resx 是英文；中文在 Strings.zh-Hans.resx（卫星程序集） -->
+    <NeutralLanguage>en</NeutralLanguage>
     <!-- 自己写 Main：单实例 -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <Nullable>enable</Nullable>
@@ -45,12 +47,13 @@
     <ProjectReference Include="..\EarPair.Sender.Core\EarPair.Sender.Core.csproj" />
   </ItemGroup>
 
-  <!-- 发布后删掉用不上的界面语言（Windows App SDK 自带 80 多种），只留简体中文、繁体中文、日语和英语 -->
+  <!-- 发布后删掉用不上的界面语言（Windows App SDK 自带 80 多种），只留简体中文、繁体中文、日语和英语。
+       EarPair 自己的翻译（zh-Hans 等目录里的 EarPair.resources.dll）一律保留 -->
   <Target Name="RemoveUnusedLanguages" AfterTargets="Publish">
     <ItemGroup>
       <_EarPairLanguageDir Include="$([System.IO.Directory]::GetDirectories('$(PublishDir)'))" />
       <_EarPairUnusedLanguage Include="@(_EarPairLanguageDir)"
-          Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Filename)%(Extension)', '^[a-z]{2,3}(-[A-Za-z]+)+$')) And !$([System.Text.RegularExpressions.Regex]::IsMatch('%(Filename)%(Extension)', '^(en-us|en-US|zh-CN|zh-TW|ja-JP)$'))" />
+          Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Filename)%(Extension)', '^[a-z]{2,3}(-[A-Za-z]+)+$')) And !$([System.Text.RegularExpressions.Regex]::IsMatch('%(Filename)%(Extension)', '^(en-us|en-US|zh-CN|zh-TW|ja-JP)$')) And !Exists('%(FullPath)\$(AssemblyName).resources.dll')" />
     </ItemGroup>
     <RemoveDir Directories="@(_EarPairUnusedLanguage)" />
   </Target>

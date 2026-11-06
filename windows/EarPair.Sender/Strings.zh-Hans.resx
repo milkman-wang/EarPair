@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 命令行版的文字（简体中文）。键和 Strings.resx 一一对应 -->
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="Usage" xml:space="preserve">
+    <value>用法：EarPair.Sender &lt;Mac 的 IP&gt; [选项]
+
+  --port N          Mac 接收端的 UDP 端口（默认 47800）
+  --device 名称     采集哪个输出设备（名称里包含这段文字即可；默认是系统默认输出设备）
+  --list-devices    列出所有输出设备
+  --frames N        每包帧数（默认 240，48 kHz 下是 5 ms；最多 360）
+  --no-keepalive    不播放静音保活（Windows 没声音时会停止发包，Mac 端会显示断开）
+  -h, --help        显示帮助
+
+示例：EarPair.Sender 192.168.1.20</value>
+  </data>
+
+  <data name="NeedsValue" xml:space="preserve">
+    <value>{0} 需要一个参数</value>
+  </data>
+  <data name="MustBeInteger" xml:space="preserve">
+    <value>{0} 必须是 {1}–{2} 之间的整数</value>
+  </data>
+  <data name="UnknownArgument" xml:space="preserve">
+    <value>未知参数：{0}</value>
+  </data>
+
+  <data name="DeviceListHeader" xml:space="preserve">
+    <value>输出设备（* 为当前默认设备）：</value>
+  </data>
+  <data name="HostMissing" xml:space="preserve">
+    <value>请提供 Mac 的局域网 IP（在 Mac 菜单栏的 EarPair 里能看到）。</value>
+  </data>
+  <data name="DeviceNotFound" xml:space="preserve">
+    <value>找不到名称包含“{0}”的输出设备，用 --list-devices 查看。</value>
+  </data>
+  <data name="Error" xml:space="preserve">
+    <value>出错了：{0}</value>
+  </data>
+  <data name="Banner" xml:space="preserve">
+    <value>EarPair 发送端 {0}</value>
+  </data>
+  <data name="Standby" xml:space="preserve">
+    <value>待机：没有声音，暂停发包，只保留握手</value>
+  </data>
+  <data name="Resumed" xml:space="preserve">
+    <value>恢复发送</value>
+  </data>
+  <data name="CaptureDevice" xml:space="preserve">
+    <value>采集设备：{0}</value>
+  </data>
+  <data name="CaptureDeviceDefault" xml:space="preserve">
+    <value>采集设备：{0}（跟随系统默认设备）</value>
+  </data>
+  <data name="CaptureFormat" xml:space="preserve">
+    <value>采集格式：{0}</value>
+  </data>
+  <data name="SendingTo" xml:space="preserve">
+    <value>发送：{0} Hz 立体声 16-bit → {1}:{2}，每包 {3} 帧</value>
+  </data>
+  <data name="MultichannelTip" xml:space="preserve">
+    <value>提示：这个输出设备是多声道，已混成立体声。在 Windows 声音设置里把它改成立体声效果更好。</value>
+  </data>
+  <data name="WaitingForDevice" xml:space="preserve">
+    <value>等待输出设备……（设备回来后自动继续）</value>
+  </data>
+  <data name="FailedRetrying" xml:space="preserve">
+    <value>出错了：{0}（稍后自动重试）</value>
+  </data>
+  <data name="NoKeepAliveTip" xml:space="preserve">
+    <value>提示：没有静音保活，Windows 没声音时会停止发包，Mac 端会显示断开。</value>
+  </data>
+  <data name="PressCtrlC" xml:space="preserve">
+    <value>按 Ctrl+C 停止。</value>
+  </data>
+  <data name="Progress" xml:space="preserve">
+    <value>[{0}] 已发送 {1} 包，{2} kbps，发送失败 {3} 次</value>
+  </data>
+  <data name="Stopped" xml:space="preserve">
+    <value>已停止。</value>
+  </data>
+</root>

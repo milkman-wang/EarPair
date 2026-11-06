@@ -47,7 +47,7 @@ Your AirPods stay connected to your Mac. EarPair sends your Windows PC's sound o
 - **PC:** Windows 10 (version 2004) or Windows 11, x64 or Arm64
 - Both on the same local network
 
-The interface is in Simplified Chinese for now. Button names below are quoted as they appear, with an English gloss.
+Both apps are in English and Simplified Chinese, following the system language.
 
 ## Getting started
 
@@ -65,7 +65,7 @@ The interface is in Simplified Chinese for now. Button names below are quoted as
 
 3. **Click your Mac** in the list. The PC's sound now plays on the Mac, and the PC's speakers stay quiet until you stop.
 
-Closing the window keeps EarPair running in the notification area (Windows 11 may tuck the icon under **^**). Turn on **开机时启动** (start at login) to have it ready after a restart.
+Closing the window keeps EarPair running in the notification area (Windows 11 may tuck the icon under **^**). Turn on **Start at login** to have it ready after a restart.
 
 > [!NOTE]
 > EarPair isn't code-signed yet. The first time you run it, Windows may show **Windows protected your PC**: click **More info → Run anyway**. On the Mac, each rebuild counts as a new app, so macOS asks for local network access again.
@@ -77,18 +77,18 @@ Closing the window keeps EarPair running in the notification area (Windows 11 ma
 - **Use it on networks you trust.** Audio isn't encrypted yet, and anything on the network can send to your Mac.
 - **The PC stays awake while sending.** Sending pauses by itself when the Mac goes away and resumes when it's back.
 - **Set the volume on the Mac.** The PC's own volume doesn't change what you hear, and the Windows volume keys unmute the PC's speakers; switch sending off and on to mute them again.
-- **To remove EarPair from the PC,** turn off **开机时启动** (start at login) first, then delete the folder.
+- **To remove EarPair from the PC,** turn off **Start at login** first, then delete the folder.
 
 ## Troubleshooting
 
 | Problem | What to do |
 |---|---|
-| The PC doesn't list your Mac | Use the same network on both (not a guest network that keeps devices apart), set the Windows network profile to **Private network**, and turn off any VPN. On the Mac, check **System Settings → Privacy & Security → Local Network**. You can also click **输入地址** (enter address) and type the Mac's IP, shown in the Mac's menu bar panel. |
+| The PC doesn't list your Mac | Use the same network on both (not a guest network that keeps devices apart), set the Windows network profile to **Private network**, and turn off any VPN. On the Mac, check **System Settings → Privacy & Security → Local Network**. You can also click **Enter address** and type the Mac's IP, shown in the Mac's menu bar panel. |
 | No ear in the Mac's menu bar | On macOS 26 and later, open **System Settings → Menu Bar** and turn on EarPair under **Allow in the Menu Bar**. |
 | No notifications on the Mac | Open **System Settings → Notifications → EarPair** and turn on **Allow Notifications**. |
 | It stopped working after rebuilding the Mac app | Allow local network access for EarPair again, as above. |
 | The PC's speakers are playing again | The Windows volume keys unmuted them. Switch sending off and on. |
-| Something else | On Windows, open **⋯ → 打开日志文件夹** (open log folder) and look at the latest log. |
+| Something else | On Windows, open **⋯ → Open log folder** and look at the latest log. |
 
 ## Command-line sender
 

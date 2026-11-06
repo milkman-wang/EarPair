@@ -39,7 +39,7 @@ struct LevelWaveform: View {
         }
         .frame(height: 40)
         .accessibilityElement()
-        .accessibilityLabel(Text("Windows 声音电平"))
+        .accessibilityLabel(Text("Sound level from Windows", bundle: .module))
     }
 
     /// −54…−6 dBFS → 0…1，安静的部分更矮
@@ -98,29 +98,45 @@ struct Sparkline: View {
 struct MetricColumn: View {
     enum Tone { case calm, normal, warning, critical }
 
-    var title: LocalizedStringKey
+    var title: Text
     var value: Double
+    /// 大号显示的数字
     var text: String
-    var unit: String
+    /// 数字连同单位，用本地化的格式排好（“60 ms”“0 次”；英文的次数没有单位）。单位按它在格式里的位置画在数字前后
+    var display: String
     var tone: Tone
     var spark: Sparkline
 
     var body: some View {
+        let units = self.units
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.subheadline).foregroundStyle(.secondary)
-            HStack(alignment: .firstTextBaseline, spacing: unit == "%" ? 1 : 3) {
+            title.font(.subheadline).foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: units.spaced ? 3 : 1) {
+                if !units.before.isEmpty { unitText(units.before) }
                 Text(verbatim: text)
                     .font(.title.weight(.semibold))
                     .monospacedDigit()
                     .foregroundStyle(valueStyle)
                     .contentTransition(.numericText(value: value))
                     .animation(.snappy, value: text) // 显示的数字变了才动，原始值的小抖动不触发
-                Text(verbatim: unit).font(.callout.weight(.medium)).foregroundStyle(.secondary)
+                if !units.after.isEmpty { unitText(units.after) }
             }
             spark
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
+    }
+
+    private func unitText(_ unit: String) -> some View {
+        Text(verbatim: unit).font(.callout.weight(.medium)).foregroundStyle(.secondary)
+    }
+
+    /// display 里数字前、后的单位，以及单位和数字之间原来有没有空格（“60 ms”有，“0.5%”没有：画的时候空得少一些）
+    private var units: (before: String, after: String, spaced: Bool) {
+        guard let range = display.range(of: text) else { return ("", "", false) }
+        let before = display[..<range.lowerBound], after = display[range.upperBound...]
+        return (before.trimmingCharacters(in: .whitespaces), after.trimmingCharacters(in: .whitespaces),
+                before.last?.isWhitespace == true || after.first?.isWhitespace == true)
     }
 
     private var valueStyle: AnyShapeStyle {

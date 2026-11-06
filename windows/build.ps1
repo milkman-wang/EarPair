@@ -20,11 +20,13 @@ $dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue).Source
 if (-not (Test-Sdk10 $dotnet)) { $dotnet = Join-Path $env:USERPROFILE '.dotnet\dotnet.exe' }
 if (-not (Test-Sdk10 $dotnet)) { throw '找不到 .NET 10 SDK，请先安装：https://dotnet.microsoft.com/download/dotnet/10.0' }
 
-# 打进 zip 之前检查发布目录：少了 pri 会启动就崩；必须自带运行时；不能混进 AI / ML 组件
+# 打进 zip 之前检查发布目录：少了 pri 会启动就崩；必须自带运行时；不能混进 AI / ML 组件；
+# 中文界面的卫星程序集不能在清理语言目录时被删掉
 function Test-Publish([string]$dir) {
     $problems = @()
     if (-not (Get-ChildItem $dir -Filter *.pri)) { $problems += '没有 .pri（缺 EnableMsixTooling，启动会崩）' }
-    foreach ($name in 'EarPair.exe', 'hostfxr.dll', 'coreclr.dll', 'Microsoft.UI.Xaml.dll') {
+    foreach ($name in 'EarPair.exe', 'hostfxr.dll', 'coreclr.dll', 'Microsoft.UI.Xaml.dll',
+                      'zh-Hans\EarPair.resources.dll', 'zh-Hans\EarPair.Sender.Core.resources.dll') {
         if (-not (Test-Path (Join-Path $dir $name))) { $problems += "缺 $name" }
     }
     if (Get-ChildItem $dir -Recurse -Include onnxruntime.dll, 'Microsoft.Windows.AI*.dll') { $problems += '混进了 AI / ML 组件' }

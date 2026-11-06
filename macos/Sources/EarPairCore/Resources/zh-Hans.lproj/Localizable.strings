@@ -1,0 +1,6 @@
+/* 简体中文。键是代码里的英文原文，规范和术语表见 docs/localization.md。 */
+
+/* 监听 UDP 端口失败：显示在菜单栏面板和概览页 */
+"Can’t create a UDP socket: %@" = "无法创建 UDP 套接字：%@";
+"Port %@ is in use by another app, so EarPair can’t receive sound from Windows." = "端口 %@ 被其他程序占用，收不到 Windows 的声音。";
+"Can’t listen on port %@: %@" = "无法监听端口 %1$@：%2$@";

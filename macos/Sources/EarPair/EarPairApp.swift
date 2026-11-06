@@ -16,7 +16,7 @@ struct EarPairApp: App {
     private let controller = ReceiverController()
 
     var body: some Scene {
-        Window("EarPair", id: MainWindow.id) {
+        Window(Text(verbatim: "EarPair"), id: MainWindow.id) {
             MainWindow(controller: controller)
         }
         .windowResizability(.contentSize)

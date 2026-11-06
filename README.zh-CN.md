@@ -10,8 +10,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-window-dark.png">
-    <img src="docs/images/mac-window-light.png" width="780" alt="Mac 上的 EarPair：Windows 电脑的声音经 Mac 从 AirPods Pro 播放">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/zh-CN/mac-window-dark.png">
+    <img src="docs/images/zh-CN/mac-window-light.png" width="780" alt="Mac 上的 EarPair：Windows 电脑的声音经 Mac 从 AirPods Pro 播放">
   </picture>
 </p>
 
@@ -31,13 +31,13 @@ AirPods 一直连着 Mac。EarPair 把 Windows 电脑的声音经局域网送到
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-menu-dark.png">
-    <img src="docs/images/mac-menu-light.png" height="200" alt="Mac 菜单栏里的 EarPair 面板">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/zh-CN/mac-menu-dark.png">
+    <img src="docs/images/zh-CN/mac-menu-light.png" height="200" alt="Mac 菜单栏里的 EarPair 面板">
   </picture>
   &nbsp;&nbsp;
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/windows-card-dark.png">
-    <img src="docs/images/windows-card-light.png" height="200" alt="Windows 上的 EarPair，正在发送到 MacBook Air">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/zh-CN/windows-card-dark.png">
+    <img src="docs/images/zh-CN/windows-card-light.png" height="200" alt="Windows 上的 EarPair，正在发送到 MacBook Air">
   </picture>
 </p>
 
@@ -46,6 +46,8 @@ AirPods 一直连着 Mac。EarPair 把 Windows 电脑的声音经局域网送到
 - **Mac**：macOS 14 或以上（macOS 26 起是 Liquid Glass 外观）
 - **电脑**：Windows 10（2004 版）或 Windows 11，x64 或 Arm64
 - 两台电脑在同一个局域网里
+
+界面有中文和英文，跟随系统语言。
 
 ## 开始使用
 

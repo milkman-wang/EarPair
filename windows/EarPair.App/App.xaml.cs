@@ -62,8 +62,8 @@ public partial class App : Application
         // 关掉窗口不退出：EarPair 留在通知区域，只有“退出”才真正结束
         DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
         // 没接住的异常记进日志（含 HRESULT 和调用栈），方便事后排查
-        UnhandledException += (_, e) => AppLog.Write($"未处理的异常：0x{e.Exception.HResult:x8} {e.Exception}");
-        AppDomain.CurrentDomain.UnhandledException += (_, e) => AppLog.Write($"未处理的异常（后台线程）：{e.ExceptionObject}");
+        UnhandledException += (_, e) => AppLog.Write(Strings.LogUnhandled(e.Exception.HResult, e.Exception));
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => AppLog.Write(Strings.LogUnhandledBackground(e.ExceptionObject));
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -79,8 +79,9 @@ public partial class App : Application
         }
 #endif
         AppLog.Prune();
-        AppLog.Write($"启动 EarPair {Version}（{RuntimeInformation.ProcessArchitecture}，" +
-                     $"{Environment.OSVersion.VersionString}）{(_startInBackground ? "，开机自启" : "")}");
+        string architecture = RuntimeInformation.ProcessArchitecture.ToString(), os = Environment.OSVersion.VersionString;
+        AppLog.Write(_startInBackground ? Strings.LogStartingAtLogin(Version, architecture, os)
+                                        : Strings.LogStarting(Version, architecture, os));
 
         // 上次异常退出时留下的本机静音：恢复
         if (Settings.MutedByUs is { } leftover)
@@ -88,7 +89,7 @@ public partial class App : Application
             SenderEngine.RestoreLeftoverMute(leftover);
             Settings.MutedByUs = null;
             Settings.Save();
-            AppLog.Write("恢复了上次留下的本机静音");
+            AppLog.Write(Strings.LogRestoredMute);
         }
         Autostart.FixPath();
 
@@ -109,7 +110,7 @@ public partial class App : Application
             if (!Settings.PostMuteDevices.Contains(id)) Settings.PostMuteDevices.Add(id);
             _postMuteDismissed = false;
             Settings.Save();
-            AppLog.Write($"这个设备静音后采集不到声音，不再静音它：{id}");
+            AppLog.Write(Strings.LogPostMuteDevice(id));
         });
         Engine.RemoteSeen += status => _dispatcher.TryEnqueue(() => OnRemoteSeen(status));
         Discovery.Changed += () => _dispatcher.TryEnqueue(OnDiscoveryChanged);
@@ -130,7 +131,8 @@ public partial class App : Application
         SwitchOn = true;
         Settings.Sending = true;
         Settings.Save();
-        AppLog.Write($"开始发送到 {target.Name}（{target.Host}:{target.Port}）{(ignoreSilence ? "，仍然发送" : "")}");
+        AppLog.Write(ignoreSilence ? Strings.LogStartSendingAnyway(target.Name, target.Host, target.Port)
+                                   : Strings.LogStartSending(target.Name, target.Host, target.Port));
         Engine.Start(new SenderSettings(target.Host, target.Port, Settings.DeviceId)
         {
             MuteLocal = Settings.MuteLocal,
@@ -150,7 +152,7 @@ public partial class App : Application
         SwitchOn = false;
         Settings.Sending = false;
         Settings.Save();
-        AppLog.Write("停止发送");
+        AppLog.Write(Strings.LogStopSending);
         Engine.Stop();
         QueueRefresh();
     }
@@ -223,7 +225,7 @@ public partial class App : Application
         static string NameOf(MacTarget m) => m.Name.Length > 0 ? m.Name : m.Host;
         string name = NameOf(mac);
         bool repeated = all.Any(m => NameOf(m) == name && !m.Matches(mac));
-        return repeated ? $"{name}（{mac.Host}）" : name;
+        return repeated ? Strings.NameWithAddress(name, mac.Host) : name;
     }
 
     private void OnRemoteSeen(StatusMessage status)
@@ -250,7 +252,7 @@ public partial class App : Application
                                Engine.Snapshot.Health == RemoteHealth.NoResponse;
                 if (waiting || !SwitchOn)
                 {
-                    AppLog.Write($"{target.Name} 换了地址：{target.Host} → {seen.Address}");
+                    AppLog.Write(Strings.LogAddressChanged(target.Name, target.Host, seen.Address));
                     target.Host = seen.Address;
                     target.Port = seen.Port;
                     target.Kind = seen.Kind ?? target.Kind;
@@ -266,7 +268,7 @@ public partial class App : Application
     /// <summary>关机或注销：同步停止发送、恢复本机声音（下次开机电脑不会一直没声音）</summary>
     private void OnSessionEnding()
     {
-        AppLog.Write("关机或注销：停止发送，恢复本机声音");
+        AppLog.Write(Strings.LogSessionEnding);
         Engine.StopAndWait(TimeSpan.FromSeconds(2));
         Settings.MutedByUs = null;
         Settings.Save();
@@ -302,13 +304,13 @@ public partial class App : Application
         {
             Settings.TrayHintShown = true;
             Settings.Save();
-            _tray?.ShowBalloon("EarPair 在后台运行", "点任务栏上的耳朵图标可以再打开");
+            _tray?.ShowBalloon(Strings.BackgroundTitle, Strings.BackgroundText);
         }
     }
 
     public void Quit()
     {
-        AppLog.Write("退出");
+        AppLog.Write(Strings.LogExit);
         Settings.Save();
         Discovery.Dispose();
         Engine.Dispose(); // 先停采集、恢复本机静音，再发 BYE
@@ -355,7 +357,7 @@ public partial class App : Application
             targets.Add(new TrayIcon.MenuItem(MacTitle(mac, macs), () => SelectTarget(mac), IsChecked: current));
         }
         if (targets.Count > 0) targets.Add(null);
-        targets.Add(new TrayIcon.MenuItem("输入地址…", () =>
+        targets.Add(new TrayIcon.MenuItem(Strings.EnterAddressMenu, () =>
         {
             ShowMainWindow();
             _window?.ShowAddressDialog();
@@ -363,21 +365,21 @@ public partial class App : Application
 
         return
         [
-            new TrayIcon.MenuItem(Settings.Target is null ? "还没有选择 Mac" : status.TrayText.Split('\n').Last(),
+            new TrayIcon.MenuItem(Settings.Target is null ? Strings.TrayNoMac : status.TrayText.Split('\n').Last(),
                                   IsEnabled: false),
             null,
             SwitchOn
-                ? new TrayIcon.MenuItem("停止发送", StopSending)
-                : new TrayIcon.MenuItem("开始发送", () => StartSending(), IsEnabled: Settings.Target is not null),
-            new TrayIcon.MenuItem("发送到", Children: targets),
-            new TrayIcon.MenuItem("发送时本机静音", () =>
+                ? new TrayIcon.MenuItem(Strings.StopSending, StopSending)
+                : new TrayIcon.MenuItem(Strings.StartSending, () => StartSending(), IsEnabled: Settings.Target is not null),
+            new TrayIcon.MenuItem(Strings.SendTo, Children: targets),
+            new TrayIcon.MenuItem(Strings.MuteWhileSending, () =>
             {
                 Settings.MuteLocal = !Settings.MuteLocal;
                 ApplySettings();
             }, IsChecked: Settings.MuteLocal),
             null,
-            new TrayIcon.MenuItem("打开 EarPair", ShowMainWindow, IsDefault: true),
-            new TrayIcon.MenuItem("退出", Quit),
+            new TrayIcon.MenuItem(Strings.OpenEarPair, ShowMainWindow, IsDefault: true),
+            new TrayIcon.MenuItem(Strings.Exit, Quit),
         ];
     }
 }

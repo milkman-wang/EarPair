@@ -55,8 +55,12 @@ struct OverviewPane: View {
                     LevelWaveform(points: controller.history, isLive: controller.stats.isStreaming)
                 }
                 // 音量和开关一直能用，任何状态下都不变淡
-                LabeledContent("音量") { VolumeRow(controller: controller, style: .form) }
-                LabeledContent("音量平衡") {
+                LabeledContent {
+                    VolumeRow(controller: controller, style: .form)
+                } label: {
+                    Text("Volume", bundle: .module)
+                }
+                LabeledContent {
                     HStack(spacing: 10) {
                         if controller.autoLevel && (controller.linkState == .playing || controller.linkState == .standby) {
                             Text(verbatim: Format.signedDecibels(controller.stats.levelingGainDB))
@@ -64,10 +68,12 @@ struct OverviewPane: View {
                                 .foregroundStyle(.secondary)
                                 .contentTransition(.numericText(value: controller.stats.levelingGainDB))
                         }
-                        Toggle("音量平衡", isOn: $controller.autoLevel)
+                        Toggle(isOn: $controller.autoLevel) { Text("Auto level", bundle: .module) }
                             .labelsHidden()
                             .toggleStyle(.switch)
                     }
+                } label: {
+                    Text("Auto level", bundle: .module)
                 }
             }
             if showsHealth {
@@ -93,19 +99,24 @@ struct HealthRow: View {
         let history = controller.history
         // 待机时没有在收，缓冲是空的，不是出了问题
         let standby = stats.state == .standby
+        let buffer = standby ? "—" : "\(Int(stats.bufferedMs.rounded()))"
+        let loss = Format.lossPercent(stats.lossPercent)
+        let underruns = "\(stats.underruns)"
         HStack(spacing: 0) {
-            MetricColumn(title: "缓冲", value: standby ? 0 : stats.bufferedMs,
-                         text: standby ? "—" : "\(Int(stats.bufferedMs.rounded()))", unit: standby ? "" : "ms",
+            MetricColumn(title: Text("Buffer", bundle: .module), value: standby ? 0 : stats.bufferedMs,
+                         text: buffer, display: standby ? buffer : Format.milliseconds(number: buffer),
                          tone: standby ? .calm : stats.bufferedMs < stats.targetMs / 2 ? .warning : .normal,
                          spark: Sparkline(values: history.map(\.bufferMs), kind: .line,
                                           ceiling: stats.targetMs * 2, tint: .secondary))
             Divider().padding(.horizontal, 14)
-            MetricColumn(title: "丢包", value: stats.lossPercent, text: Format.lossPercent(stats.lossPercent), unit: "%",
+            MetricColumn(title: Text("Packet loss", bundle: .module), value: stats.lossPercent,
+                         text: loss, display: Format.percent(number: loss),
                          tone: .loss(stats.lossPercent),
                          spark: Sparkline(values: history.map { Double($0.packetsLost) }, kind: .events,
                                           ceiling: 5, tint: .orange))
             Divider().padding(.horizontal, 14)
-            MetricColumn(title: "卡顿", value: Double(stats.underruns), text: "\(stats.underruns)", unit: "次",
+            MetricColumn(title: Text("Dropouts", bundle: .module), value: Double(stats.underruns),
+                         text: underruns, display: Format.times(underruns),
                          tone: .underruns(stats.underruns),
                          spark: Sparkline(values: history.map { Double($0.underruns) }, kind: .events,
                                           ceiling: 1, tint: .orange))
@@ -124,37 +135,53 @@ struct SoundPane: View {
     var body: some View {
         Form {
             Section {
-                LabeledContent("音量") { VolumeRow(controller: controller, style: .form) }
-                LabeledContent("左右") { BalanceSlider(balance: $controller.balance) }
+                LabeledContent {
+                    VolumeRow(controller: controller, style: .form)
+                } label: {
+                    Text("Volume", bundle: .module)
+                }
+                LabeledContent {
+                    BalanceSlider(balance: $controller.balance)
+                } label: {
+                    Text("Balance", bundle: .module)
+                }
             }
             Section {
-                Toggle("音量平衡", isOn: $controller.autoLevel)
-                LabeledContent("目标响度") {
-                    Picker("目标响度", selection: $controller.loudness) {
+                Toggle(isOn: $controller.autoLevel) { Text("Auto level", bundle: .module) }
+                LabeledContent {
+                    Picker(selection: $controller.loudness) {
                         ForEach(LoudnessPreset.allCases) { preset in
-                            Text(preset.title).tag(preset)
+                            Text(verbatim: preset.title).tag(preset)
                         }
+                    } label: {
+                        Text("Target loudness", bundle: .module)
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
                     .fixedSize()
+                } label: {
+                    Text("Target loudness", bundle: .module)
                 }
                 .disabled(!controller.autoLevel)
                 if controller.autoLevel && (stats.state == .playing || stats.state == .standby) {
-                    LabeledContent("当前增益") {
+                    LabeledContent {
                         Text(verbatim: Format.signedDecibels(stats.levelingGainDB))
                             .monospacedDigit()
                             .contentTransition(.numericText(value: stats.levelingGainDB))
+                    } label: {
+                        Text("Current gain", bundle: .module)
                     }
                 }
             }
             Section {
-                LabeledContent("输出") {
+                LabeledContent {
                     if let device = controller.outputDevice {
                         Label(device.name, systemImage: device.symbolName)
                     } else {
-                        Text("没有输出设备")
+                        Text("No output device", bundle: .module)
                     }
+                } label: {
+                    Text("Output", bundle: .module)
                 }
             }
         }
@@ -173,15 +200,19 @@ struct NetworkPane: View {
     var body: some View {
         Form {
             Section {
-                LabeledContent("缓冲") {
-                    Picker("缓冲", selection: $controller.bufferMs) {
+                LabeledContent {
+                    Picker(selection: $controller.bufferMs) {
                         ForEach([30, 60, 100, 150], id: \.self) { value in
-                            Text(verbatim: "\(value) ms").tag(value)
+                            Text(verbatim: Format.milliseconds(Double(value))).tag(value)
                         }
+                    } label: {
+                        Text("Buffer", bundle: .module)
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
                     .fixedSize()
+                } label: {
+                    Text("Buffer", bundle: .module)
                 }
                 if !controller.history.isEmpty {
                     BufferHistoryChart(history: controller.history, target: Double(controller.bufferMs))
@@ -190,41 +221,57 @@ struct NetworkPane: View {
                 }
             }
             Section {
-                StatRow(title: "收到", value: stats.packetsReceived, text: "\(Format.count(stats.packetsReceived)) 个")
-                StatRow(title: "丢包", value: stats.packetsLost,
-                        text: "\(Format.count(stats.packetsLost)) 个 · \(Format.lossPercent(stats.lossPercent))%",
+                StatRow(title: Text("Packets received", bundle: .module), value: stats.packetsReceived,
+                        text: Format.packets(Format.count(stats.packetsReceived)))
+                StatRow(title: Text("Packet loss", bundle: .module), value: stats.packetsLost,
+                        text: Format.packetLoss(count: Format.count(stats.packetsLost),
+                                                percent: Format.lossPercent(stats.lossPercent)),
                         tone: .loss(stats.lossPercent))
-                StatRow(title: "迟到", value: stats.packetsLate, text: "\(Format.count(stats.packetsLate)) 个")
-                StatRow(title: "卡顿", value: stats.underruns, text: "\(Format.count(stats.underruns)) 次",
-                        tone: .underruns(stats.underruns))
-                StatRow(title: "跳过", value: stats.latencyTrims, text: "\(Format.count(stats.latencyTrims)) 次")
-                LabeledContent("抖动") {
+                StatRow(title: Text("Late packets", bundle: .module), value: stats.packetsLate,
+                        text: Format.packets(Format.count(stats.packetsLate)))
+                StatRow(title: Text("Dropouts", bundle: .module), value: stats.underruns,
+                        text: Format.times(Format.count(stats.underruns)), tone: .underruns(stats.underruns))
+                StatRow(title: Text("Latency trims", bundle: .module), value: stats.latencyTrims,
+                        text: Format.times(Format.count(stats.latencyTrims)))
+                LabeledContent {
                     Text(verbatim: stats.isStreaming ? Format.milliseconds(stats.jitterMs, digits: 1) : "—")
                         .foregroundStyle(stats.isStreaming ? .secondary : .tertiary)
+                } label: {
+                    Text("Jitter", bundle: .module)
                 }
-                LabeledContent("码率") {
+                LabeledContent {
                     Text(verbatim: stats.isStreaming ? Format.megabits(controller.bitrateKbps) : "—")
                         .foregroundStyle(stats.isStreaming ? .secondary : .tertiary)
+                } label: {
+                    Text("Bitrate", bundle: .module)
                 }
             }
             .monospacedDigit()
             Section {
-                Toggle("时钟漂移补偿", isOn: $controller.driftCompensation)
-                LabeledContent("时钟偏差") {
+                Toggle(isOn: $controller.driftCompensation) { Text("Clock drift compensation", bundle: .module) }
+                LabeledContent {
                     Text(verbatim: driftText(stats))
                         .monospacedDigit()
                         .foregroundStyle((stats.state == .playing || stats.state == .standby) && stats.secondsPlayed >= 60
                                          ? .secondary : .tertiary)
+                } label: {
+                    Text("Clock drift", bundle: .module)
                 }
             }
         }
         .formStyle(.grouped)
         .toolbar {
             ToolbarItem {
-                Button("重置统计", systemImage: "arrow.counterclockwise") {
+                Button {
                     controller.resetStatistics()
+                } label: {
+                    Label {
+                        Text("Reset Statistics", bundle: .module)
+                    } icon: {
+                        Image(systemName: "arrow.counterclockwise")
+                    }
                 }
-                .help("重置统计")
+                .help(Text("Reset Statistics", bundle: .module))
             }
         }
     }
@@ -232,16 +279,18 @@ struct NetworkPane: View {
 
 /// 统计的一行：为 0 时用浅色，超过阈值时橙色或红色
 private struct StatRow: View {
-    var title: LocalizedStringKey
+    var title: Text
     var value: Int
     var text: String
     var tone: MetricColumn.Tone = .normal
 
     var body: some View {
-        LabeledContent(title) {
+        LabeledContent {
             Text(verbatim: text)
                 .foregroundStyle(style)
                 .contentTransition(.numericText(value: Double(value)))
+        } label: {
+            title
         }
     }
 
@@ -272,14 +321,16 @@ struct ConnectionPane: View {
                             Text(verbatim: local.address)
                                 .monospacedDigit()
                                 .textSelection(.enabled)
-                            CopyButton(text: local.address, help: "复制地址")
+                            CopyButton(text: local.address, help: String(localized: "Copy Address", bundle: .module))
                         }
                     } label: {
                         Text(verbatim: local.name)
                     }
                 }
-                LabeledContent("端口") {
+                LabeledContent {
                     Text(verbatim: "\(ReceiverController.port)").monospacedDigit()
+                } label: {
+                    Text("Port", bundle: .module)
                 }
             }
             Section {
@@ -294,15 +345,23 @@ struct ConnectionPane: View {
                         StatusPill(state: controller.linkState)
                     }
                     if let address = stats.senderAddress {
-                        LabeledContent("地址") {
+                        LabeledContent {
                             Text(verbatim: address).monospacedDigit().textSelection(.enabled)
+                        } label: {
+                            Text("Address", bundle: .module)
                         }
                     }
                     if let format = stats.formatText {
-                        LabeledContent("格式", value: format)
+                        LabeledContent {
+                            Text(verbatim: format)
+                        } label: {
+                            Text("Format", bundle: .module)
+                        }
                     }
-                    LabeledContent("已播放") {
+                    LabeledContent {
                         Text(verbatim: Format.duration(stats.secondsPlayed)).monospacedDigit()
+                    } label: {
+                        Text("Time played", bundle: .module)
                     }
                 }
             }
@@ -316,6 +375,8 @@ struct ConnectionPane: View {
 
 func driftText(_ stats: ReceiverStats) -> String {
     guard stats.isStreaming else { return "—" }
-    if (stats.state == .playing || stats.state == .standby) && stats.secondsPlayed < 60 { return "测量中…" }
+    if (stats.state == .playing || stats.state == .standby) && stats.secondsPlayed < 60 {
+        return String(localized: "Measuring…", bundle: .module)
+    }
     return Format.ppm(stats.driftPPM)
 }

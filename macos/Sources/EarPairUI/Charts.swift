@@ -18,18 +18,22 @@ struct BufferHistoryChart: View {
     }
 
     var body: some View {
+        // 坐标的名字只给辅助功能读
+        let time = Text("Time", bundle: .module)
+        let buffer = Text("Buffer", bundle: .module)
         Chart {
             ForEach(history) { point in
-                AreaMark(x: .value("时间", point.id), yStart: .value("下限", 0), yEnd: .value("缓冲", point.bufferMs))
+                AreaMark(x: .value(time, point.id), yStart: .value(Text("Lower limit", bundle: .module), 0),
+                         yEnd: .value(buffer, point.bufferMs))
                     .foregroundStyle(LinearGradient(colors: [.accentColor.opacity(0.2), .accentColor.opacity(0)],
                                                     startPoint: .top, endPoint: .bottom))
                     .interpolationMethod(.monotone)
-                LineMark(x: .value("时间", point.id), y: .value("缓冲", point.bufferMs))
+                LineMark(x: .value(time, point.id), y: .value(buffer, point.bufferMs))
                     .foregroundStyle(Color.accentColor)
                     .lineStyle(StrokeStyle(lineWidth: 1.5))
                     .interpolationMethod(.monotone)
             }
-            RuleMark(y: .value("目标", target))
+            RuleMark(y: .value(Text("Target", bundle: .module), target))
                 .foregroundStyle(.secondary)
                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
                 .annotation(position: .top, alignment: .trailing) {
@@ -43,6 +47,6 @@ struct BufferHistoryChart: View {
         .chartYScale(domain: 0...upperBound)
         .chartXAxis(.hidden)
         .chartYAxis(.hidden)
-        .accessibilityLabel(Text("最近一分钟的缓冲水位"))
+        .accessibilityLabel(Text("Buffer level over the last minute", bundle: .module))
     }
 }

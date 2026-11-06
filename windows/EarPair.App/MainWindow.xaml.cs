@@ -137,12 +137,12 @@ public sealed partial class MainWindow : Window
             else RefreshPicker();
             ShowNotice(status.Notice);
 
-            TargetButton.Content = target is null ? "选择 Mac" : App.MacTitle(target, _app.AvailableMacs());
+            TargetButton.Content = target is null ? Strings.ChooseMac : App.MacTitle(target, _app.AvailableMacs());
             MuteSwitch.IsOn = _app.Settings.MuteLocal;
             string? device = _app.Engine.Snapshot.DeviceId ?? _app.Settings.DeviceId;
             bool cannotMute = device is not null && _app.Settings.PostMuteDevices.Contains(device);
             MuteSwitch.IsEnabled = !cannotMute;
-            ToolTipService.SetToolTip(MuteSwitch, cannotMute ? "这个设备静音后采集不到声音" : null);
+            ToolTipService.SetToolTip(MuteSwitch, cannotMute ? Strings.CannotMuteDevice : null);
             StartupSwitch.IsOn = Autostart.IsEnabled;
             UpdateMeterTimer();
         }
@@ -182,7 +182,8 @@ public sealed partial class MainWindow : Window
         IReadOnlyList<DiscoveredMac> macs = _app.Discovery.Macs;
         HashSet<string> repeated = macs.GroupBy(m => m.Name).Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet();
         MacList.ItemsSource = macs
-            .Select(m => new MacListItem(m, repeated.Contains(m.Name) ? $"{m.Name}（{m.Address}）" : m.Name))
+            .Select(m => new MacListItem(m, repeated.Contains(m.Name) ? Strings.NameWithAddress(m.Name, m.Address)
+                                                                      : m.Name))
             .ToList();
         bool done = _app.Discovery.EnumerationCompleted;
         PickerRing.Visibility = done ? Visibility.Collapsed : Visibility.Visible;
@@ -199,7 +200,10 @@ public sealed partial class MainWindow : Window
         {
             _devices = SenderEngine.ListDevices();
             AudioDeviceInfo? systemDefault = _devices.FirstOrDefault(d => d.IsDefault);
-            var items = new List<string> { systemDefault is null ? "系统默认" : $"系统默认（{systemDefault.Name}）" };
+            var items = new List<string>
+            {
+                systemDefault is null ? Strings.SystemDefault : Strings.SystemDefaultDevice(systemDefault.Name),
+            };
             items.AddRange(_devices.Select(d => d.Name));
             DeviceBox.ItemsSource = items;
             int index = _app.Settings.DeviceId is { } id ? _devices.ToList().FindIndex(d => d.Id == id) : -1;
@@ -326,7 +330,7 @@ public sealed partial class MainWindow : Window
             TargetMenu.Items.Add(item);
         }
         if (TargetMenu.Items.Count > 0) TargetMenu.Items.Add(new MenuFlyoutSeparator());
-        var enter = new MenuFlyoutItem { Text = "输入地址…", Icon = new FontIcon { Glyph = "" } };
+        var enter = new MenuFlyoutItem { Text = Strings.EnterAddressMenu, Icon = new FontIcon { Glyph = "" } };
         enter.Click += async (_, _) => await ShowAddressDialogAsync();
         TargetMenu.Items.Add(enter);
     }
@@ -375,17 +379,18 @@ public sealed partial class MainWindow : Window
     private async Task ShowAddressDialogAsync()
     {
         var box = new TextBox { PlaceholderText = "192.168.1.20", Text = _app.Settings.Target?.Host ?? "" };
-        // 用 XAML 建，颜色才能跟着主题走
+        // 用 XAML 建，颜色才能跟着主题走（文字在代码里设：译文里的引号会破坏 XAML）
         var error = (TextBlock)XamlReader.Load(
-            "<TextBlock xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' Text='找不到这个地址' " +
+            "<TextBlock xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' " +
             "Visibility='Collapsed' Foreground='{ThemeResource SystemFillColorCriticalBrush}' />");
+        error.Text = Strings.AddressNotFound;
         var dialog = new ContentDialog
         {
             XamlRoot = Content.XamlRoot,
-            Title = "输入 Mac 的地址",
+            Title = Strings.AddressDialogTitle,
             Content = new StackPanel { Spacing = 8, Children = { box, error } },
-            PrimaryButtonText = "连接",
-            CloseButtonText = "取消",
+            PrimaryButtonText = Strings.Connect,
+            CloseButtonText = Strings.Cancel,
             DefaultButton = ContentDialogButton.Primary,
             RequestedTheme = (Content as FrameworkElement)?.ActualTheme ?? ElementTheme.Default,
         };

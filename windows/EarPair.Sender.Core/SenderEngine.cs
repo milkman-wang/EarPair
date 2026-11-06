@@ -311,7 +311,7 @@ public sealed class SenderEngine : IDisposable
         }
         catch (Exception ex) when (ex is System.Net.Sockets.SocketException or ArgumentException)
         {
-            SetState(SenderState.Failed, $"找不到 {settings.Host}");
+            SetState(SenderState.Failed, CoreStrings.HostNotFound(settings.Host));
             ScheduleRetry();
             return;
         }
@@ -362,7 +362,7 @@ public sealed class SenderEngine : IDisposable
         }
         catch (Exception ex) when (ex is System.Net.Sockets.SocketException or ArgumentException)
         {
-            SetState(SenderState.Failed, $"找不到 {settings.Host}");
+            SetState(SenderState.Failed, CoreStrings.HostNotFound(settings.Host));
             ScheduleRetry();
             return;
         }
@@ -407,7 +407,7 @@ public sealed class SenderEngine : IDisposable
             capture.Stopped += ex => Post(() => OnCaptureStopped(capture, ex));
             _deviceId = device.ID;
             _deviceName = device.FriendlyName;
-            Log?.Invoke($"开始采集：{device.FriendlyName}（{capture.FormatDescription}），流 {_streamId:x8}");
+            Log?.Invoke(CoreStrings.LogCaptureStarted(device.FriendlyName, capture.FormatDescription, _streamId));
             capture.Start();
             _retryCount = 0;
             _sendingSince = Now;
@@ -497,7 +497,7 @@ public sealed class SenderEngine : IDisposable
         _remoteAt = Now;
         if (first) RemoteSeen?.Invoke(status);
 
-        if (first) Log?.Invoke($"Mac 回传：{status.Name}（{status.App}）");
+        if (first) Log?.Invoke(CoreStrings.LogMacResponded(status.Name, status.App));
 
         if (_standby && _state == SenderState.Sending && !status.IsBusy)
         {
@@ -587,7 +587,7 @@ public sealed class SenderEngine : IDisposable
         // 先告诉 Mac（它只剩 60 ms 缓冲），再写日志；下一个 tick 再发一份，丢一个也不要紧
         SendHello(settings);
         _nextHelloAt = now + 0.25;
-        Log?.Invoke("没有声音，待机：暂停发音频，只保留握手");
+        Log?.Invoke(CoreStrings.LogStandby);
         Publish();
     }
 
@@ -598,7 +598,7 @@ public sealed class SenderEngine : IDisposable
         _resumedAt = Now;
         // 下一个 tick 再发 HELLO：那时 Mac 已经攒够 60 ms 缓冲，回的是“正在播放”而不是“缓冲中”
         _nextHelloAt = Now + 0.25;
-        Log?.Invoke("有声音了，恢复发送");
+        Log?.Invoke(CoreStrings.LogResumed);
         Publish();
     }
 
@@ -611,7 +611,7 @@ public sealed class SenderEngine : IDisposable
         if (Stopwatch.GetElapsedTime(Volatile.Read(ref _lastCaptureAt)).TotalSeconds > 0.5) return;
         lock (_sendGate) _standby = false;
         _activeUntil = Now + 1;
-        Log?.Invoke("Mac 那边没有这一路流，先恢复发送让它接上");
+        Log?.Invoke(CoreStrings.LogWakeForMac);
         Publish();
     }
 
@@ -626,7 +626,7 @@ public sealed class SenderEngine : IDisposable
         bool network = reason == ByeReason.Network;
         if (network) _fastProbeUntil = Now + 30;
         _nextHelloAt = Now + (network ? 1 : 3);
-        Log?.Invoke(network ? "联系不上 Mac，暂停发送，继续探测" : "Mac 正在放别的电脑的声音，暂停发送");
+        Log?.Invoke(network ? CoreStrings.LogPausedNoResponse : CoreStrings.LogPausedBusy);
         SetState(SenderState.WaitingForMac, null);
     }
 
@@ -729,7 +729,8 @@ public sealed class SenderEngine : IDisposable
     private void SetState(SenderState state, string? error)
     {
         if (state != _state || error != _error)
-            Log?.Invoke(error is null ? $"状态：{state}" : $"状态：{state}，{error}");
+            Log?.Invoke(error is null ? CoreStrings.LogState(state.ToString())
+                                      : CoreStrings.LogStateWithError(state.ToString(), error));
         _state = state;
         _error = error;
         Publish();
@@ -814,8 +815,8 @@ public sealed class SenderEngine : IDisposable
 
     private static string Describe(Exception ex) => ex switch
     {
-        COMException com when (uint)com.HResult == 0x88890004 => "输出设备不可用",
-        COMException com when (uint)com.HResult == 0x8889000A => "输出设备正被其他程序独占使用",
+        COMException com when (uint)com.HResult == 0x88890004 => CoreStrings.DeviceUnavailable,
+        COMException com when (uint)com.HResult == 0x8889000A => CoreStrings.DeviceInExclusiveUse,
         _ => ex.Message,
     };
 

@@ -254,10 +254,10 @@ struct PillLabel: View {
 
     private var text: String {
         switch pill {
-        case .waiting: return "等待连接"
-        case .stopped: return "已停止"
-        case .reconnecting: return "正在重新连接"
-        case .disconnected: return "已断开"
+        case .waiting: return String(localized: "Waiting", bundle: .module)
+        case .stopped: return String(localized: "Stopped", bundle: .module)
+        case .reconnecting: return String(localized: "Reconnecting", bundle: .module)
+        case .disconnected: return String(localized: "Disconnected", bundle: .module)
         case .failed(let short): return short
         }
     }

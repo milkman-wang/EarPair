@@ -7,8 +7,10 @@ import SwiftUI
 extension ReceiverStats {
     var formatText: String? {
         guard let format, senderAddress != nil else { return nil }
-        let channels = format.channels == 1 ? "单声道" : "立体声"
-        return "\(Format.sampleRate(format.sampleRate)) · \(channels)"
+        let rate = Format.sampleRate(format.sampleRate)
+        return format.channels == 1
+            ? String(localized: "\(rate) · Mono", bundle: .module)
+            : String(localized: "\(rate) · Stereo", bundle: .module)
     }
 
     /// 正在收发送端的流（缓冲中或播放中）
@@ -59,7 +61,8 @@ struct MuteButton: View {
     var volume: Double
 
     var body: some View {
-        IconButton(systemImage: speakerSymbol(volume: volume, muted: muted), help: muted ? "取消静音" : "静音") {
+        let help = muted ? String(localized: "Unmute", bundle: .module) : String(localized: "Mute", bundle: .module)
+        IconButton(systemImage: speakerSymbol(volume: volume, muted: muted), help: help) {
             muted.toggle()
         }
     }
@@ -149,7 +152,7 @@ struct AddressRows: View {
                         .monospacedDigit()
                         .foregroundStyle(centered ? .secondary : .primary)
                         .textSelection(.enabled)
-                    CopyButton(text: local.address, help: "复制地址")
+                    CopyButton(text: local.address, help: String(localized: "Copy Address", bundle: .module))
                 }
             }
         }
@@ -202,44 +205,55 @@ struct StatusPill: View {
 
     private var text: String {
         switch state {
-        case .waiting: return "等待连接"
-        case .connecting: return "正在连接"
-        case .playing: return "正在播放"
-        case .standby: return "待机"
-        case .stopped: return "已停止"
-        case .reconnecting: return "正在重新连接"
-        case .disconnected: return "已断开"
-        case .receiveFailed: return "无法接收"
-        case .outputFailed: return "无法播放"
+        case .waiting: return String(localized: "Waiting", bundle: .module)
+        case .connecting: return String(localized: "Connecting", bundle: .module)
+        case .playing: return String(localized: "Playing", bundle: .module)
+        case .standby: return String(localized: "Standby", bundle: .module)
+        case .stopped: return String(localized: "Stopped", bundle: .module)
+        case .reconnecting: return String(localized: "Reconnecting", bundle: .module)
+        case .disconnected: return String(localized: "Disconnected", bundle: .module)
+        case .receiveFailed: return String(localized: "Can’t receive", bundle: .module)
+        case .outputFailed: return String(localized: "Can’t play", bundle: .module)
         }
     }
 }
 
 // MARK: - 格式
 
+/// 数字自己排好（小数位、正负号、减号），单位和数字的位置交给本地化的格式
 enum Format {
     /// 用真正的减号显示负数
     private static func minus(_ text: String) -> String { text.replacingOccurrences(of: "-", with: "−") }
 
     static func decibels(_ value: Double) -> String {
-        value <= -119 ? "−∞ dB" : minus(String(format: "%.0f dB", value))
+        decibels(number: value <= -119 ? "−∞" : minus(String(format: "%.0f", value)))
     }
 
     static func signedDecibels(_ value: Double) -> String {
-        minus(String(format: "%+.1f dB", value))
+        decibels(number: minus(String(format: "%+.1f", value)))
     }
 
-    static func percent(_ value: Double) -> String { "\(Int((value * 100).rounded()))%" }
+    private static func decibels(number: String) -> String { String(localized: "\(number) dB", bundle: .module) }
+
+    static func percent(_ value: Double) -> String { percent(number: "\(Int((value * 100).rounded()))") }
+
+    static func percent(number: String) -> String { String(localized: "\(number)%", bundle: .module) }
 
     static func sampleRate(_ hz: Int) -> String {
-        hz % 1000 == 0 ? "\(hz / 1000) kHz" : String(format: "%.1f kHz", Double(hz) / 1000)
+        let number = hz % 1000 == 0 ? "\(hz / 1000)" : String(format: "%.1f", Double(hz) / 1000)
+        return String(localized: "\(number) kHz", bundle: .module)
     }
 
     static func milliseconds(_ value: Double, digits: Int = 0) -> String {
-        String(format: "%.\(digits)f ms", value)
+        milliseconds(number: String(format: "%.\(digits)f", value))
     }
 
-    static func ppm(_ value: Double) -> String { minus(String(format: "%+.0f ppm", value)) }
+    static func milliseconds(number: String) -> String { String(localized: "\(number) ms", bundle: .module) }
+
+    static func ppm(_ value: Double) -> String {
+        let number = minus(String(format: "%+.0f", value))
+        return String(localized: "\(number) ppm", bundle: .module)
+    }
 
     /// 0 → "0"；小于 0.01 → "<0.01"（不显示成 0.00）；小于 1 → 两位小数；否则一位小数（单位 % 另外画）
     static func lossPercent(_ percent: Double) -> String {
@@ -251,8 +265,25 @@ enum Format {
     /// 69467 → "69,467"
     static func count(_ value: Int) -> String { value.formatted() }
 
+    /// 包数、次数：中文带量词（“69,467 个”“3 次”），英文只有数字（名词在标签里，不用分单复数）
+    static func packets(_ count: String) -> String {
+        String(localized: "count.packets", defaultValue: "\(count)", bundle: .module)
+    }
+
+    static func times(_ count: String) -> String {
+        String(localized: "count.times", defaultValue: "\(count)", bundle: .module)
+    }
+
+    /// 丢包数和丢包率：“3 个 · 0.12%”
+    static func packetLoss(count: String, percent: String) -> String {
+        String(localized: "count.packetLoss", defaultValue: "\(count) · \(percent)%", bundle: .module)
+    }
+
     /// kbps → "1.59 Mbps"
-    static func megabits(_ kbps: Double) -> String { String(format: "%.2f Mbps", kbps / 1000) }
+    static func megabits(_ kbps: Double) -> String {
+        let number = String(format: "%.2f", kbps / 1000)
+        return String(localized: "\(number) Mbps", bundle: .module)
+    }
 
     /// 时长：m:ss 或 h:mm:ss
     static func duration(_ seconds: Double) -> String {

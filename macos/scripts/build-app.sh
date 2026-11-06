@@ -9,8 +9,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/toolchain.sh
 
-swift build -c release --product EarPair
-BIN_DIR="$(swift build -c release --show-bin-path)"
+# 指定 Swift Build 构建系统（新工具链的默认）：它生成的 Bundle.module 会到 App 的 Contents/Resources 里找资源包。
+# 旧的 native 构建系统只找 App 根目录和 .build 里的绝对路径，换台电脑或者清掉 .build 就找不到翻译了
+swift build -c release --build-system swiftbuild --product EarPair
+BIN_DIR="$(swift build -c release --build-system swiftbuild --show-bin-path)"
 
 APP="build/EarPair.app"
 rm -rf "$APP"
@@ -23,6 +25,10 @@ xcrun vtool -set-build-version macos "$MIN_OS" "$SDK_VERSION" -replace \
   -output "$APP/Contents/MacOS/EarPair" "$BIN_DIR/EarPair"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+# Info.plist 里文字的各语言版本（本地网络权限的说明）
+cp -R Resources/*.lproj "$APP/Contents/Resources/"
+# SwiftPM 的资源包：界面文字的翻译
+cp -R "$BIN_DIR"/EarPair_*.bundle "$APP/Contents/Resources/"
 codesign --force --sign "${SIGN_IDENTITY:--}" "$APP"
 
 echo "完成：$(pwd)/$APP"

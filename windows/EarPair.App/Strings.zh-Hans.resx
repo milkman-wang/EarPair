@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 界面文字（简体中文）。键和 Strings.resx 一一对应 -->
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="ControlLanguage" xml:space="preserve">
+    <value>zh-CN</value>
+  </data>
+
+  <data name="More" xml:space="preserve">
+    <value>更多</value>
+  </data>
+  <data name="OpenLogFolder" xml:space="preserve">
+    <value>打开日志文件夹</value>
+  </data>
+  <data name="ExitEarPair" xml:space="preserve">
+    <value>退出 EarPair</value>
+  </data>
+  <data name="Send" xml:space="preserve">
+    <value>发送</value>
+  </data>
+  <data name="ChooseMac" xml:space="preserve">
+    <value>选择 Mac</value>
+  </data>
+  <data name="SearchAgain" xml:space="preserve">
+    <value>重新查找</value>
+  </data>
+  <data name="NoMacsFound" xml:space="preserve">
+    <value>没有找到 Mac</value>
+  </data>
+  <data name="EnterAddress" xml:space="preserve">
+    <value>输入地址</value>
+  </data>
+  <data name="EnterAddressMenu" xml:space="preserve">
+    <value>输入地址…</value>
+  </data>
+  <data name="SendTo" xml:space="preserve">
+    <value>发送到</value>
+  </data>
+  <data name="SoundSource" xml:space="preserve">
+    <value>声音来源</value>
+  </data>
+  <data name="MuteWhileSending" xml:space="preserve">
+    <value>发送时本机静音</value>
+  </data>
+  <data name="StartAtLogin" xml:space="preserve">
+    <value>开机时启动</value>
+  </data>
+  <data name="CannotMuteDevice" xml:space="preserve">
+    <value>这个设备静音后采集不到声音</value>
+  </data>
+  <data name="NameWithAddress" xml:space="preserve">
+    <value>{0}（{1}）</value>
+  </data>
+  <data name="SystemDefault" xml:space="preserve">
+    <value>系统默认</value>
+  </data>
+  <data name="SystemDefaultDevice" xml:space="preserve">
+    <value>系统默认（{0}）</value>
+  </data>
+
+  <data name="AddressDialogTitle" xml:space="preserve">
+    <value>输入 Mac 的地址</value>
+  </data>
+  <data name="AddressNotFound" xml:space="preserve">
+    <value>找不到这个地址</value>
+  </data>
+  <data name="Connect" xml:space="preserve">
+    <value>连接</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+
+  <data name="StatusNotSending" xml:space="preserve">
+    <value>未发送</value>
+  </data>
+  <data name="StatusCantSend" xml:space="preserve">
+    <value>无法发送</value>
+  </data>
+  <data name="SomethingWentWrong" xml:space="preserve">
+    <value>出错了</value>
+  </data>
+  <data name="Retry" xml:space="preserve">
+    <value>重试</value>
+  </data>
+  <data name="StatusNoSource" xml:space="preserve">
+    <value>找不到声音来源</value>
+  </data>
+  <data name="StatusMacBusy" xml:space="preserve">
+    <value>Mac 正忙</value>
+  </data>
+  <data name="BusyPlaying" xml:space="preserve">
+    <value>正在播放 {0} 的声音</value>
+  </data>
+  <data name="BusyPlayingUnknown" xml:space="preserve">
+    <value>正在播放另一台电脑的声音</value>
+  </data>
+  <data name="StatusConnecting" xml:space="preserve">
+    <value>正在连接</value>
+  </data>
+  <data name="StatusWaitingForMac" xml:space="preserve">
+    <value>等待 Mac</value>
+  </data>
+  <data name="ResumesWhenMacAvailable" xml:space="preserve">
+    <value>Mac 可用后自动继续</value>
+  </data>
+  <data name="SendAnyway" xml:space="preserve">
+    <value>仍然发送</value>
+  </data>
+  <data name="StatusMacNotResponding" xml:space="preserve">
+    <value>Mac 没有响应</value>
+  </data>
+  <data name="EarPairNotOpenOnMac" xml:space="preserve">
+    <value>Mac 上的 EarPair 没有打开</value>
+  </data>
+  <data name="CantReachMac" xml:space="preserve">
+    <value>连不上 Mac</value>
+  </data>
+  <data name="StatusStandby" xml:space="preserve">
+    <value>待机</value>
+  </data>
+  <data name="StatusMutedOnMac" xml:space="preserve">
+    <value>Mac 上已静音</value>
+  </data>
+  <data name="StatusPlaying" xml:space="preserve">
+    <value>正在播放</value>
+  </data>
+  <data name="StatusSending" xml:space="preserve">
+    <value>正在发送</value>
+  </data>
+  <data name="PostMuteNotice" xml:space="preserve">
+    <value>这个设备静音后采集不到声音，已恢复本机声音</value>
+  </data>
+  <data name="PathDescription" xml:space="preserve">
+    <value>{0}：{1} 到 {2}</value>
+  </data>
+  <data name="PathDescriptionWithOutput" xml:space="preserve">
+    <value>{0}：{1} 到 {2}，再到 {3}</value>
+  </data>
+
+  <data name="TrayNoMac" xml:space="preserve">
+    <value>还没有选择 Mac</value>
+  </data>
+  <data name="StartSending" xml:space="preserve">
+    <value>开始发送</value>
+  </data>
+  <data name="StopSending" xml:space="preserve">
+    <value>停止发送</value>
+  </data>
+  <data name="OpenEarPair" xml:space="preserve">
+    <value>打开 EarPair</value>
+  </data>
+  <data name="Exit" xml:space="preserve">
+    <value>退出</value>
+  </data>
+  <data name="BackgroundTitle" xml:space="preserve">
+    <value>EarPair 在后台运行</value>
+  </data>
+  <data name="BackgroundText" xml:space="preserve">
+    <value>点任务栏上的耳朵图标可以再打开</value>
+  </data>
+
+  <data name="LogStarting" xml:space="preserve">
+    <value>启动 EarPair {0}（{1}，{2}）</value>
+  </data>
+  <data name="LogStartingAtLogin" xml:space="preserve">
+    <value>启动 EarPair {0}（{1}，{2}），开机自启</value>
+  </data>
+  <data name="LogRestoredMute" xml:space="preserve">
+    <value>恢复了上次留下的本机静音</value>
+  </data>
+  <data name="LogPostMuteDevice" xml:space="preserve">
+    <value>这个设备静音后采集不到声音，不再静音它：{0}</value>
+  </data>
+  <data name="LogStartSending" xml:space="preserve">
+    <value>开始发送到 {0}（{1}:{2}）</value>
+  </data>
+  <data name="LogStartSendingAnyway" xml:space="preserve">
+    <value>开始发送到 {0}（{1}:{2}），仍然发送</value>
+  </data>
+  <data name="LogStopSending" xml:space="preserve">
+    <value>停止发送</value>
+  </data>
+  <data name="LogAddressChanged" xml:space="preserve">
+    <value>{0} 换了地址：{1} → {2}</value>
+  </data>
+  <data name="LogSessionEnding" xml:space="preserve">
+    <value>关机或注销：停止发送，恢复本机声音</value>
+  </data>
+  <data name="LogExit" xml:space="preserve">
+    <value>退出</value>
+  </data>
+  <data name="LogUnhandled" xml:space="preserve">
+    <value>未处理的异常：0x{0} {1}</value>
+  </data>
+  <data name="LogUnhandledBackground" xml:space="preserve">
+    <value>未处理的异常（后台线程）：{0}</value>
+  </data>
+</root>

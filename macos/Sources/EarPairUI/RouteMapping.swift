@@ -8,10 +8,12 @@ import SwiftUI
 func senderSymbol(_ kind: DeviceKind?) -> String { kind == .laptop ? "laptopcomputer" : "display" }
 
 extension ReceiverController {
-    var senderDisplayName: String { senderName ?? stats.senderAddress ?? "Windows 电脑" }
+    var senderDisplayName: String { senderName ?? stats.senderAddress ?? Self.genericSenderName }
 
     /// 等待时的占位：上次播放过的电脑，没有就是笼统的“Windows 电脑”
-    var waitingSenderName: String { lastSenderName ?? "Windows 电脑" }
+    var waitingSenderName: String { lastSenderName ?? Self.genericSenderName }
+
+    private static var genericSenderName: String { String(localized: "Windows PC", bundle: .module) }
 
     var senderNode: RouteNode {
         switch linkState {
@@ -30,7 +32,7 @@ extension ReceiverController {
 
     var outputNode: RouteNode {
         RouteNode(symbol: outputDevice?.symbolName ?? "speaker.slash",
-                  name: outputDevice?.name ?? "没有输出设备",
+                  name: outputDevice?.name ?? String(localized: "No output device", bundle: .module),
                   isPlaceholder: outputDevice == nil,
                   badge: muted && (linkState == .playing || linkState == .standby) ? "speaker.slash.fill" : nil)
     }
@@ -48,8 +50,8 @@ extension ReceiverController {
         case .stopped: return [(.inactive, .stopped), (.inactive, nil)]
         case .reconnecting: return [(.connecting, .reconnecting), (.inactive, nil)]
         case .disconnected: return [(.broken, .disconnected), (.inactive, nil)]
-        case .receiveFailed: return [(.failed, .failed("无法接收")), (.inactive, nil)]
-        case .outputFailed: return [(incoming, nil), (.failed, .failed("无法播放"))]
+        case .receiveFailed: return [(.failed, .failed(Self.cannotReceive)), (.inactive, nil)]
+        case .outputFailed: return [(incoming, nil), (.failed, .failed(Self.cannotPlay))]
         }
     }
 
@@ -65,10 +67,13 @@ extension ReceiverController {
         case .stopped: return (.inactive, nil) // 面板里只画灰线
         case .reconnecting: return (.connecting, nil)
         case .disconnected: return (.broken, .disconnected)
-        case .receiveFailed: return (.failed, .failed("无法接收"))
-        case .outputFailed: return (.failed, .failed("无法播放"))
+        case .receiveFailed: return (.failed, .failed(Self.cannotReceive))
+        case .outputFailed: return (.failed, .failed(Self.cannotPlay))
         }
     }
+
+    private static var cannotReceive: String { String(localized: "Can’t receive", bundle: .module) }
+    private static var cannotPlay: String { String(localized: "Can’t play", bundle: .module) }
 
     var failureMessage: String? {
         switch linkState {
@@ -82,17 +87,27 @@ extension ReceiverController {
 
     /// 路线整体给 VoiceOver 的一句话
     var routeAccessibilityLabel: String {
+        let sender = senderDisplayName
         switch linkState {
         case .waiting:
-            return "等待 \(waitingSenderName) 连接，本机地址 " + localAddresses.map(\.address).joined(separator: "、")
-        case .connecting: return "正在连接 \(senderDisplayName)"
+            // 列表分隔符：中文是顿号
+            let addresses = localAddresses.map(\.address).joined(separator: String(localized: ", ", bundle: .module))
+            guard let name = lastSenderName else {
+                return String(localized: "Waiting for a Windows PC to connect. This Mac is at \(addresses)",
+                              bundle: .module)
+            }
+            return String(localized: "Waiting for \(name) to connect. This Mac is at \(addresses)", bundle: .module)
+        case .connecting: return String(localized: "Connecting to \(sender)", bundle: .module)
         case .playing:
-            return muted ? "\(senderDisplayName) 的声音已静音"
-                : "\(senderDisplayName) 到 \(outputDevice?.name ?? "输出设备")，正在播放"
-        case .standby: return "\(senderDisplayName) 没有声音，待机"
-        case .stopped: return "\(senderDisplayName) 已停止发送"
-        case .reconnecting: return "正在重新连接 \(senderDisplayName)"
-        case .disconnected: return "\(senderDisplayName) 已断开"
+            if muted { return String(localized: "Sound from \(sender) is muted", bundle: .module) }
+            guard let output = outputDevice?.name else {
+                return String(localized: "Playing from \(sender)", bundle: .module)
+            }
+            return String(localized: "Playing from \(sender) to \(output)", bundle: .module)
+        case .standby: return String(localized: "No sound from \(sender), on standby", bundle: .module)
+        case .stopped: return String(localized: "\(sender) has stopped sending", bundle: .module)
+        case .reconnecting: return String(localized: "Reconnecting to \(sender)", bundle: .module)
+        case .disconnected: return String(localized: "Disconnected from \(sender)", bundle: .module)
         case .receiveFailed(let message), .outputFailed(let message): return message
         }
     }

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -19,12 +20,12 @@ internal static class Program
         {
             Console.Error.WriteLine(ex.Message);
             Console.Error.WriteLine();
-            Console.Error.WriteLine(Options.Usage);
+            Console.Error.WriteLine(CliStrings.Usage);
             return 2;
         }
         if (options.ShowHelp)
         {
-            Console.WriteLine(Options.Usage);
+            Console.WriteLine(CliStrings.Usage);
             return 0;
         }
 
@@ -33,16 +34,16 @@ internal static class Program
             IReadOnlyList<AudioDeviceInfo> devices = SenderEngine.ListDevices();
             if (options.ListDevices)
             {
-                Console.WriteLine("输出设备（* 为当前默认设备）：");
+                Console.WriteLine(CliStrings.DeviceListHeader);
                 foreach (AudioDeviceInfo device in devices)
                     Console.WriteLine($"  {(device.IsDefault ? "*" : " ")} {device.Name}");
                 return 0;
             }
             if (options.Host is null)
             {
-                Console.Error.WriteLine("请提供 Mac 的局域网 IP（在 Mac 菜单栏的 EarPair 里能看到）。");
+                Console.Error.WriteLine(CliStrings.HostMissing);
                 Console.Error.WriteLine();
-                Console.Error.WriteLine(Options.Usage);
+                Console.Error.WriteLine(CliStrings.Usage);
                 return 2;
             }
 
@@ -53,7 +54,7 @@ internal static class Program
                     d => d.Name.Contains(options.DeviceFilter, StringComparison.OrdinalIgnoreCase));
                 if (match is null)
                 {
-                    Console.Error.WriteLine($"找不到名称包含“{options.DeviceFilter}”的输出设备，用 --list-devices 查看。");
+                    Console.Error.WriteLine(CliStrings.DeviceNotFound(options.DeviceFilter));
                     return 1;
                 }
                 deviceId = match.Id;
@@ -62,7 +63,7 @@ internal static class Program
         }
         catch (COMException ex)
         {
-            Console.Error.WriteLine($"出错了：{ex.Message}");
+            Console.Error.WriteLine(CliStrings.Error(ex.Message));
             return 1;
         }
     }
@@ -77,7 +78,7 @@ internal static class Program
             stopped.Set();
         };
 
-        Console.WriteLine("EarPair 发送端 0.2");
+        Console.WriteLine(CliStrings.Banner("0.2"));
         SenderSnapshot? shown = null;
         bool standbyShown = false;
         engine.Changed += () =>
@@ -86,8 +87,8 @@ internal static class Program
             if (s.Standby != standbyShown)
             {
                 standbyShown = s.Standby;
-                if (s.Standby) Console.WriteLine("  待机：没有声音，暂停发包，只保留握手");
-                else if (s.State == SenderState.Sending) Console.WriteLine("  恢复发送");
+                if (s.Standby) Console.WriteLine("  " + CliStrings.Standby);
+                else if (s.State == SenderState.Sending) Console.WriteLine("  " + CliStrings.Resumed);
             }
             if (shown is not null && shown.State == s.State && shown.DeviceName == s.DeviceName && shown.Error == s.Error)
                 return;
@@ -95,25 +96,26 @@ internal static class Program
             switch (s.State)
             {
                 case SenderState.Sending:
-                    Console.WriteLine($"  采集设备：{s.DeviceName}{(deviceId is null ? "（跟随系统默认设备）" : "")}");
-                    Console.WriteLine($"  采集格式：{s.FormatDescription}");
-                    Console.WriteLine($"  发送：{s.SampleRate} Hz 立体声 16-bit → {host}:{options.Port}，每包 {options.FramesPerPacket} 帧");
+                    Console.WriteLine("  " + (deviceId is null ? CliStrings.CaptureDeviceDefault(s.DeviceName)
+                                                               : CliStrings.CaptureDevice(s.DeviceName)));
+                    Console.WriteLine("  " + CliStrings.CaptureFormat(s.FormatDescription));
+                    Console.WriteLine("  " + CliStrings.SendingTo(s.SampleRate, host, options.Port, options.FramesPerPacket));
                     if (s.ChannelCount > 2)
-                        Console.WriteLine("  提示：这个输出设备是多声道，已混成立体声。在 Windows 声音设置里把它改成立体声效果更好。");
+                        Console.WriteLine("  " + CliStrings.MultichannelTip);
                     break;
                 case SenderState.WaitingForDevice:
-                    Console.WriteLine("  等待输出设备……（设备回来后自动继续）");
+                    Console.WriteLine("  " + CliStrings.WaitingForDevice);
                     break;
                 case SenderState.Failed:
-                    Console.WriteLine($"  出错了：{s.Error}（稍后自动重试）");
+                    Console.WriteLine("  " + CliStrings.FailedRetrying(s.Error));
                     break;
             }
         };
 
         engine.Start(new SenderSettings(host, options.Port, deviceId, options.KeepAlive, options.FramesPerPacket));
         if (!options.KeepAlive)
-            Console.WriteLine("  提示：没有静音保活，Windows 没声音时会停止发包，Mac 端会显示断开。");
-        Console.WriteLine("按 Ctrl+C 停止。");
+            Console.WriteLine("  " + CliStrings.NoKeepAliveTip);
+        Console.WriteLine(CliStrings.PressCtrlC);
 
         var clock = Stopwatch.StartNew();
         long lastBytes = 0;
@@ -122,10 +124,11 @@ internal static class Program
             SenderSnapshot s = engine.Snapshot;
             double kbps = (s.BytesSent - lastBytes) * 8 / 5.0 / 1000;
             lastBytes = s.BytesSent;
-            Console.WriteLine($"[{clock.Elapsed:hh\\:mm\\:ss}] 已发送 {s.PacketsSent} 包，{kbps:F0} kbps，发送失败 {s.SendErrors} 次");
+            Console.WriteLine(CliStrings.Progress(clock.Elapsed.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture),
+                                                  s.PacketsSent, kbps.ToString("F0", CultureInfo.CurrentCulture), s.SendErrors));
         }
         engine.Stop();
-        Console.WriteLine("已停止。");
+        Console.WriteLine(CliStrings.Stopped);
         return 0;
     }
 }

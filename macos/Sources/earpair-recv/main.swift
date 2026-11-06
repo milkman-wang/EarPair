@@ -155,7 +155,15 @@ receiverBox.receiver = receiver
 do {
     try receiver.start()
 } catch {
-    FileHandle.standardError.write(Data("\(error.localizedDescription)\n".utf8))
+    // 开发工具一律中文，也不依赖 EarPairCore 的资源包（单独拷走这个文件也能报错，不会崩）
+    let message: String
+    switch error as? UDPReceiverError {
+    case .socketFailed(let reason)?: message = "无法创建 UDP 套接字：\(reason)"
+    case .bindFailed(let port, let code, _)? where code == EADDRINUSE: message = "端口 \(port) 被其他程序占用"
+    case .bindFailed(let port, _, let reason)?: message = "无法监听端口 \(port)：\(reason)"
+    case nil: message = "\(error)"
+    }
+    FileHandle.standardError.write(Data("\(message)\n".utf8))
     exit(1)
 }
 

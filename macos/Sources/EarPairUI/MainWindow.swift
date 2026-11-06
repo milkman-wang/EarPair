@@ -8,12 +8,12 @@ public enum MainSection: String, CaseIterable, Identifiable, Sendable {
 
     public var id: Self { self }
 
-    var title: LocalizedStringKey {
+    var title: Text {
         switch self {
-        case .overview: return "概览"
-        case .sound: return "声音"
-        case .network: return "网络"
-        case .connection: return "连接"
+        case .overview: return Text("Overview", bundle: .module)
+        case .sound: return Text("Sound", bundle: .module)
+        case .network: return Text("Network", bundle: .module)
+        case .connection: return Text("Connection", bundle: .module)
         }
     }
 
@@ -53,7 +53,7 @@ public struct MainWindow: View {
         NavigationSplitView {
             List(MainSection.allCases, selection: $selection) { section in
                 Label {
-                    Text(section.title)
+                    section.title
                 } icon: {
                     SidebarIcon(symbol: section.symbol, tint: section.tint)
                 }
