@@ -81,7 +81,22 @@ public sealed record HelloMessage(
     [property: JsonPropertyName("stream")] uint Stream);
 
 /// <summary>发送端停止发送。</summary>
-public sealed record ByeMessage([property: JsonPropertyName("stream")] uint Stream);
+public sealed record ByeMessage(
+    [property: JsonPropertyName("stream")] uint Stream,
+    [property: JsonPropertyName("reason")] string? Reason = null); // 见 ByeReason
+
+/// <summary>BYE 的 reason：Mac 据此区分“手动停止”和“网络不好断开”，网络断开时它会主动联系发送端。</summary>
+public static class ByeReason
+{
+    /// <summary>手动停止：关掉开关、退出、换了别的 Mac、关机或注销</summary>
+    public const string User = "user";
+    /// <summary>联系不上 Mac，自己暂停了（之后继续探测，Mac 回来就恢复）</summary>
+    public const string Network = "network";
+    /// <summary>音频设备没了（拔掉、被停用），设备回来后自动恢复</summary>
+    public const string Device = "device";
+    /// <summary>Mac 正在放别的电脑的声音</summary>
+    public const string Busy = "busy";
+}
 
 /// <summary>接收端 → 发送端：接收状态。</summary>
 public sealed record StatusMessage

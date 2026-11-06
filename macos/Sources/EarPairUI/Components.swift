@@ -193,7 +193,7 @@ struct StatusPill: View {
     private var color: Color? {
         switch state {
         case .playing: return .green
-        case .connecting: return .orange
+        case .connecting, .reconnecting: return .orange
         case .stopped, .disconnected: return .gray
         case .receiveFailed, .outputFailed: return .red
         case .waiting: return nil
@@ -206,6 +206,7 @@ struct StatusPill: View {
         case .connecting: return "正在连接"
         case .playing: return "正在播放"
         case .stopped: return "已停止"
+        case .reconnecting: return "正在重新连接"
         case .disconnected: return "已断开"
         case .receiveFailed: return "无法接收"
         case .outputFailed: return "无法播放"

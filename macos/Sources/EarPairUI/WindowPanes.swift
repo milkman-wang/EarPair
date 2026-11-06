@@ -15,7 +15,7 @@ struct OverviewPane: View {
     private var showsWaveform: Bool {
         switch controller.linkState {
         case .connecting, .playing, .outputFailed: return true
-        case .waiting, .stopped, .disconnected, .receiveFailed: return false
+        case .waiting, .stopped, .reconnecting, .disconnected, .receiveFailed: return false
         }
     }
 
@@ -23,11 +23,13 @@ struct OverviewPane: View {
     private var showsHealth: Bool {
         switch controller.linkState {
         case .waiting, .receiveFailed: return false
-        case .connecting, .playing, .outputFailed, .stopped, .disconnected: return true
+        case .connecting, .playing, .outputFailed, .stopped, .reconnecting, .disconnected: return true
         }
     }
 
-    private var hasEnded: Bool { controller.linkState == .stopped || controller.linkState == .disconnected }
+    private var hasEnded: Bool {
+        controller.linkState == .stopped || controller.linkState == .reconnecting || controller.linkState == .disconnected
+    }
 
     var body: some View {
         Form {
@@ -283,7 +285,7 @@ struct ConnectionPane: View {
                                     title: controller.waitingSenderName, isPlaceholder: true) {
                         StatusPill(state: controller.linkState)
                     }
-                case .connecting, .playing, .stopped, .disconnected, .outputFailed:
+                case .connecting, .playing, .stopped, .reconnecting, .disconnected, .outputFailed:
                     DeviceHeaderRow(symbol: senderSymbol(controller.senderKind), title: controller.senderDisplayName) {
                         StatusPill(state: controller.linkState)
                     }

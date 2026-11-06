@@ -12,12 +12,16 @@ internal static class Demo
 {
     public sealed record Scene(SenderSnapshot Snapshot, bool SwitchOn, MacTarget? Target, float Peak);
 
+    /// <summary>截图里用通用的名字，不带真实的电脑名；画成台式机，和 Mac 端 README 截图里的同一台电脑一致</summary>
+    public const string PcName = "DESKTOP-PC";
+    public const string PcKind = "desktop";
+
     public static readonly string[] Names =
         ["pick", "off", "connecting", "playing", "muted", "legacy", "noresponse", "waiting", "busy", "nosource", "failed", "postmute"];
 
     public static IEnumerable<DiscoveredMac> Macs =>
     [
-        new("a", "milkman的MacBook Air", "192.168.1.199", 47800, "5f0e3c2a", "laptop"),
+        new("a", "MacBook Air", "192.168.1.199", 47800, "5f0e3c2a", "laptop"),
         new("b", "Mac mini", "192.168.1.42", 47800, "9b7d4e1f", "desktop"),
     ];
 
@@ -25,12 +29,12 @@ internal static class Demo
     {
         var mac = new MacTarget
         {
-            Id = "5f0e3c2a", Name = "milkman的MacBook Air", Host = "192.168.1.199", Kind = "laptop", KnownToReply = true,
+            Id = "5f0e3c2a", Name = "MacBook Air", Host = "192.168.1.199", Kind = "laptop", KnownToReply = true,
         };
         var settings = new SenderSettings(mac.Host);
         var playing = new StatusMessage
         {
-            Name = mac.Name, Kind = "laptop", State = "playing", Output = "milkman的AirPods Pro", Transport = "bluetooth",
+            Name = mac.Name, Kind = "laptop", State = "playing", Output = "AirPods Pro", Transport = "bluetooth",
         };
         const float loud = 0.25f; // −12 dBFS
 

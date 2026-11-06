@@ -76,7 +76,12 @@ func format(_ value: Double, _ digits: Int = 1) -> String {
 func describe(_ s: ReceiverStats, kbps: Double) -> String {
     let state: String
     switch s.state {
-    case .idle: state = s.endedBySender ? "已停止" : "等待"
+    case .idle:
+        switch s.endReason {
+        case .stopped?, .device?: state = "已停止"
+        case .network?: state = "断开"
+        case nil: state = "等待"
+        }
     case .buffering: state = "缓冲"
     case .playing: state = "播放"
     }

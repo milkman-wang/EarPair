@@ -28,13 +28,32 @@ public enum IngestResult: Equatable, Sendable {
     case ignored
 }
 
+/// 一路流为什么结束了
+public enum EndReason: String, Equatable, Sendable {
+    /// 发送端主动停止（关掉开关、退出、换了别的 Mac）
+    case stopped
+    /// 网络问题：一直收不到包（超时），或者发送端联系不上 Mac、自己暂停了
+    case network
+    /// 发送端的音频设备没了（拔掉、被停用）
+    case device
+
+    /// BYE 里的 reason。没有或者不认识的当作主动停止（早期的发送端不带 reason）
+    public init(byeReason: String?) {
+        switch byeReason {
+        case "network": self = .network
+        case "device": self = .device
+        default: self = .stopped
+        }
+    }
+}
+
 public struct ReceiverStats: Equatable, Sendable {
     public var state: PlaybackState = .idle
     public var senderAddress: String?
     /// 当前（或最近一个）流的 ID
     public var streamID: UInt32?
-    /// 现在是 idle，并且最近一个流是发送端用 BYE 结束的（不是超时断开）
-    public var endedBySender = false
+    /// 现在是 idle 时，最近一路流是怎么结束的；正在收或者从没收过时是 nil
+    public var endReason: EndReason?
     public var format: StreamFormat?
     public var packetsReceived = 0
     public var packetsLost = 0
@@ -142,6 +161,9 @@ public final class ReceiverCore: @unchecked Sendable {
         let sender: String
         let id: UInt32
     }
+
+    /// 最近一路流怎么结束的；开始新流时清掉
+    private var lastEndReason: EndReason?
 
     private let lock = UnfairLock()
 
@@ -301,16 +323,18 @@ public final class ReceiverCore: @unchecked Sendable {
         lock.withLock {
             guard let s = stream, state != .idle, now - s.lastArrival > config.streamTimeout else { return }
             endStreamLocked()
+            lastEndReason = .network
         }
     }
 
     /// 发送端说它停了（控制包 BYE）：是当前流就立即进入 idle，不等超时。
     /// 之后同一个流迟到的包都忽略，不会再“连上”一次；同一个发送端换了新流照常开始。
-    public func endStream(_ id: UInt32, from sender: String) {
+    public func endStream(_ id: UInt32, from sender: String, reason: EndReason = .stopped) {
         lock.withLock {
             guard let s = stream, s.id == id, s.senderAddress == sender, state != .idle else { return }
             endStreamLocked()
             endedStream = EndedStream(sender: sender, id: id)
+            lastEndReason = reason
         }
     }
 
@@ -375,6 +399,7 @@ public final class ReceiverCore: @unchecked Sendable {
 
     private func beginStream(_ header: PacketHeader, sender: String, now: Double) {
         endedStream = nil
+        lastEndReason = nil
         let format = StreamFormat(sampleRate: Int(header.sampleRate), channels: Int(header.channels))
         stream = Stream(id: header.streamID, format: format, senderAddress: sender,
                         nextSequence: header.sequence, nextSampleTime: header.sampleTime, lastArrival: now)
@@ -686,7 +711,7 @@ public final class ReceiverCore: @unchecked Sendable {
         lock.withLock {
             var result = counters
             result.state = state
-            result.endedBySender = state == .idle && endedStream != nil
+            result.endReason = state == .idle ? lastEndReason : nil
             result.targetMs = config.targetLatency * 1000
             result.jitterMs = jitter * 1000
             result.driftPPM = driftEstimatePPM

@@ -71,14 +71,17 @@ public static class StatusDescriber
         _ => SpeakersGlyph,
     };
 
-    public static StatusView Describe(SenderSnapshot s, bool switchOn, MacTarget? target, bool postMuteDismissed)
+    /// <param name="pcName">这台电脑显示的名字；null 用 DNS 主机名（--demo 截图时换成通用的名字）</param>
+    /// <param name="pcKind">这台电脑的类型（laptop / desktop）；null 用本机检测到的（--demo 截图时固定成台式机）</param>
+    public static StatusView Describe(SenderSnapshot s, bool switchOn, MacTarget? target, bool postMuteDismissed,
+                                      string? pcName = null, string? pcKind = null)
     {
         if (target is null)
             return new StatusView("选择 Mac", null, null, TrayGlyph.Idle, "EarPair");
 
         string mac = target.Name is { Length: > 0 } name ? name : target.Host;
         StatusMessage? remote = s.Remote;
-        var pc = new NodeView(PcGlyph(HostIdentity.Kind), HostIdentity.Name, ToolTip: s.DeviceName);
+        var pc = new NodeView(PcGlyph(pcKind ?? HostIdentity.Kind), pcName ?? HostIdentity.Name, ToolTip: s.DeviceName);
         var macNode = new NodeView(MacGlyph(remote?.Kind ?? target.Kind), mac, ToolTip: target.Host);
         NodeView? Output(bool muted = false) => remote?.Output is { Length: > 0 } output
             ? new NodeView(OutputGlyph(remote.Transport), output, Muted: muted)

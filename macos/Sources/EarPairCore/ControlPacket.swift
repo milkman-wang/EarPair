@@ -106,11 +106,13 @@ public struct StatusMessage: Codable, Equatable, Sendable {
     public init() {}
 }
 
-/// 发送端停止发送
+/// 发送端停止发送。reason：user（手动停止）/ network（联系不上 Mac，自己暂停了）/ device（音频设备没了）/ busy
 public struct ByeMessage: Codable, Equatable, Sendable {
     public var stream: UInt32?
+    public var reason: String?
 
-    public init(stream: UInt32?) {
+    public init(stream: UInt32?, reason: String? = nil) {
         self.stream = stream
+        self.reason = reason
     }
 }

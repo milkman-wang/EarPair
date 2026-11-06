@@ -125,6 +125,8 @@ public sealed class SenderEngine : IDisposable
     private double _silentSince = double.NaN;
     private bool _postMuteFallback;
     private double _freshUntil = double.NegativeInfinity;
+    /// <summary>刚开始等 Mac、或者刚联系不上 Mac 的这段时间里每秒探测一次，网络恢复后能马上接上</summary>
+    private double _fastProbeUntil = double.NegativeInfinity;
     private double _mutedAt;
     private double _othersCheckedAt = double.NegativeInfinity;
     /// <summary>静音之后还采到过声音：这台设备静音不影响采集，不用再查</summary>
@@ -196,7 +198,7 @@ public sealed class SenderEngine : IDisposable
         {
             // 先停采集，再跟旧的 Mac 告别
             TearDown();
-            SendBye();
+            SendBye(ByeReason.User);
         }
         _settings = settings;
         if (targetChanged)
@@ -270,7 +272,7 @@ public sealed class SenderEngine : IDisposable
     {
         SetTicking(false);
         TearDown();
-        SendBye();
+        SendBye(ByeReason.User);
         _settings = null;
         ReleaseSocket();
         SetState(SenderState.Stopped, null);
@@ -280,7 +282,8 @@ public sealed class SenderEngine : IDisposable
     private void Probe(SenderSettings settings)
     {
         TearDown();
-        SendBye();
+        SendBye(ByeReason.Network);
+        _fastProbeUntil = Now + 30;
         try
         {
             EnsureSocket(settings);
@@ -417,6 +420,7 @@ public sealed class SenderEngine : IDisposable
     {
         if (capture != _capture || _settings is null) return; // 是我们自己停的
         TearDown();
+        SendBye(ByeReason.Device); // Mac 显示“已停止”并说明是设备断开，不当成网络问题
         _retryAt = Now + (ex is null ? 1.0 : 0.5);
         SetState(SenderState.WaitingForDevice, null);
     }
@@ -454,7 +458,7 @@ public sealed class SenderEngine : IDisposable
 
         if (status.IsBusy)
         {
-            if (_state == SenderState.Sending) Pause();
+            if (_state == SenderState.Sending) Pause(ByeReason.Busy);
         }
         else if (_state == SenderState.WaitingForMac)
         {
@@ -484,34 +488,40 @@ public sealed class SenderEngine : IDisposable
             _udp.SendControl(ControlPacket.Encode(new HelloMessage(settings.SenderId, settings.SenderName,
                                                                    settings.SenderKind, settings.App,
                                                                    sending ? _streamId : 0)));
-            _nextHelloAt = now + (sending ? 2 : 3);
+            _nextHelloAt = now + (sending ? 2 : now < _fastProbeUntil ? 1 : 3);
         }
 
         if (_state == SenderState.Sending && _replies && !settings.IgnoreSilence)
         {
             // 开始发送后先给 Mac 几秒钟回应
             double silence = now - Math.Max(_remoteAt, _sendingSince);
-            if (silence > 10) Pause();
+            if (silence > 10) Pause(ByeReason.Network);
         }
 
         if (_state == SenderState.Sending) CheckPostMuteCapture(now);
         Publish();
     }
 
-    /// <summary>暂停等 Mac：先停采集（本机恢复出声，电脑可以睡眠），再发 BYE，之后继续发 HELLO 探测。</summary>
-    private void Pause()
+    /// <summary>
+    /// 暂停等 Mac：先停采集（本机恢复出声，电脑可以睡眠），再发 BYE，之后继续发 HELLO 探测。
+    /// 因为联系不上 Mac 而暂停时，头 30 秒每秒探测一次，网络恢复后很快就能接上。
+    /// </summary>
+    private void Pause(string reason)
     {
         TearDown();
-        SendBye();
-        _nextHelloAt = Now + 3;
+        SendBye(reason);
+        bool network = reason == ByeReason.Network;
+        if (network) _fastProbeUntil = Now + 30;
+        _nextHelloAt = Now + (network ? 1 : 3);
+        Log?.Invoke(network ? "联系不上 Mac，暂停发送，继续探测" : "Mac 正在放别的电脑的声音，暂停发送");
         SetState(SenderState.WaitingForMac, null);
     }
 
-    /// <summary>告诉 Mac 这一路流结束了。只在 Sending 时发；调用前先 TearDown（TearDown 不改 _state）。</summary>
-    private void SendBye()
+    /// <summary>告诉 Mac 这一路流结束了，以及为什么。只在 Sending 时发；调用前先 TearDown（TearDown 不改 _state）。</summary>
+    private void SendBye(string reason)
     {
         if (_udp is null || _state != SenderState.Sending) return;
-        byte[] bye = ControlPacket.Encode(new ByeMessage(_streamId));
+        byte[] bye = ControlPacket.Encode(new ByeMessage(_streamId, reason));
         _udp.SendControl(bye);
         _udp.SendControl(bye);
     }
@@ -693,7 +703,7 @@ public sealed class SenderEngine : IDisposable
         Post(() =>
         {
             TearDown();
-            SendBye();
+            SendBye(ByeReason.User);
             _settings = null;
             ReleaseSocket();
             if (_notifications is not null) _enumerator?.UnregisterEndpointNotificationCallback(_notifications);

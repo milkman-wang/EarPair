@@ -112,6 +112,7 @@ struct RouteLink: View {
     enum Pill: Equatable {
         case waiting
         case stopped
+        case reconnecting
         case disconnected
         case failed(String)
     }
@@ -123,7 +124,7 @@ struct RouteLink: View {
     /// 面板里连线短，“等待连接”“已停止”只看线型，不放标签
     private var shownPill: Pill? {
         guard metrics.compactPills else { return pill }
-        return pill == .waiting || pill == .stopped ? nil : pill
+        return pill == .waiting || pill == .stopped || pill == .reconnecting ? nil : pill
     }
 
     var body: some View {
@@ -255,6 +256,7 @@ struct PillLabel: View {
         switch pill {
         case .waiting: return "等待连接"
         case .stopped: return "已停止"
+        case .reconnecting: return "正在重新连接"
         case .disconnected: return "已断开"
         case .failed(let short): return short
         }

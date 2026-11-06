@@ -186,11 +186,12 @@ func macIcon(size: Int) -> Data {
         cg.drawLinearGradient(gradient, start: CGPoint(x: plate.minX, y: plate.maxY),
                               end: CGPoint(x: plate.maxX, y: plate.minY), options: [])
         cg.restoreGState()
-        let ear = CGRect(x: plate.minX + plate.width * 0.02, y: plate.minY + plate.height * 0.12,
-                         width: plate.width * 0.76, height: plate.height * 0.76)
+        // 按耳朵线条（含描边）的实际外框在底板里居中，高度占底板的 62%
+        let stroke: CGFloat = 1.9
+        let ear = earRect(in: plate.insetBy(dx: plate.width * 0.19, dy: plate.height * 0.19), stroke: stroke)
         withEarSpace(cg, rect: ear) {
             cg.setStrokeColor(NSColor.white.cgColor)
-            cg.setLineWidth(1.9)
+            cg.setLineWidth(stroke)
             cg.setLineCap(.round)
             cg.setLineJoin(.round)
             cg.addPath(path(outerOutline))

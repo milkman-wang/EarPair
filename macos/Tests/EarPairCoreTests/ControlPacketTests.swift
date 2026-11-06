@@ -127,14 +127,14 @@ struct ControlPacketTests {
         send(responder, .bye, ByeMessage(stream: factory.streamID), from: pc, at: 0.03)
         var stats = core.statistics(now: 0.03)
         #expect(stats.state == .idle)
-        #expect(stats.endedBySender)
+        #expect(stats.endReason == .stopped, "不带 reason 的 BYE 当作手动停止")
 
         // 还在路上的包：不再“连上”一次
         #expect(core.ingest(factory.packet(5), from: "10.0.0.2", at: 0.035) == .ignored)
         #expect(core.ingest(factory.packet(6), from: "10.0.0.2", at: 0.04) == .ignored)
         stats = core.statistics(now: 0.04)
         #expect(stats.state == .idle)
-        #expect(stats.endedBySender)
+        #expect(stats.endReason == .stopped)
         #expect(stats.packetsIgnored == 2)
 
         // 再打开开关：新的 streamID
@@ -143,10 +143,10 @@ struct ControlPacketTests {
         stats = core.statistics(now: 1)
         #expect(stats.state == .buffering)
         #expect(stats.streamID == 0x1234_5678)
-        #expect(!stats.endedBySender)
+        #expect(stats.endReason == nil)
     }
 
-    @Test("超时断开不算发送端停止")
+    @Test("超时断开算网络问题，不算发送端停止")
     func timeoutIsNotStop() {
         let core = makeCore()
         let factory = PacketFactory()
@@ -154,7 +154,7 @@ struct ControlPacketTests {
         core.housekeeping(now: 2)
         let stats = core.statistics(now: 2)
         #expect(stats.state == .idle)
-        #expect(!stats.endedBySender)
+        #expect(stats.endReason == .network)
         // 超时之后同一路流又来了包（比如网络恢复）：照常重新开始
         #expect(core.ingest(factory.packet(1), from: "10.0.0.2", at: 2.1) == .accepted)
     }
@@ -191,5 +191,88 @@ struct ControlPacketTests {
         legacy.withUnsafeBytes { responder.handle($0, from: UDPEndpoint(address: "10.0.0.6", port: 1), now: 0.1) }
         #expect(responder.senderName(for: "10.0.0.6") == "OLD-PC")
         #expect(responder.senderKind(for: "10.0.0.6") == nil)
+    }
+
+    @Test("BYE 的 reason：network、device 分开记；不认识的当作手动停止")
+    func byeReasons() {
+        for (reason, expected) in [("network", EndReason.network), ("device", .device), ("user", .stopped),
+                                   ("busy", .stopped), ("新的原因", .stopped)] {
+            let core = makeCore()
+            let responder = makeResponder(core, Outbox())
+            let factory = PacketFactory()
+            core.ingest(factory.packet(0), from: "10.0.0.2", at: 0)
+            send(responder, .bye, ByeMessage(stream: factory.streamID, reason: reason),
+                 from: UDPEndpoint(address: "10.0.0.2", port: 1), at: 0.01)
+            #expect(core.statistics(now: 0.01).endReason == expected, "reason \(reason)")
+        }
+        let packet = ControlPacket.encode(.bye, ByeMessage(stream: 7, reason: "network"))!
+        let body = packet.withUnsafeBytes { ControlPacket.parse($0) }!.body
+        #expect(String(decoding: body, as: UTF8.self) == #"{"reason":"network","stream":7}"#)
+    }
+
+    @Test("网络断开后主动联系发送端：每秒往它上次 HELLO 的来源发 STATUS，到时间或者取消就停")
+    func reconnectPings() {
+        let core = makeCore()
+        let outbox = Outbox()
+        let responder = makeResponder(core, outbox)
+        let pc = UDPEndpoint(address: "10.0.0.2", port: 50_123)
+        #expect(!responder.startReconnecting(to: "10.0.0.2", until: 100), "没发过 HELLO，不知道往哪发")
+
+        send(responder, .hello, HelloMessage(name: "DESKTOP-PC", stream: 0), from: pc, at: 0)
+        #expect(responder.startReconnecting(to: "10.0.0.2", until: 20))
+        let before = outbox.statuses.count
+        for t in stride(from: 10.0, through: 25.0, by: 0.25) { responder.tick(now: t) } // HELLO 早已过期
+        let pings = outbox.statuses.dropFirst(before)
+        #expect(pings.count == 10, "10…19 秒每秒一次，20 秒到期")
+        #expect(pings.allSatisfy { $0.to == pc && $0.message.state == "idle" })
+
+        #expect(responder.startReconnecting(to: "10.0.0.2", until: 100))
+        responder.tick(now: 30)
+        responder.stopReconnecting()
+        let afterStop = outbox.statuses.count
+        for t in stride(from: 31.0, through: 40.0, by: 1) { responder.tick(now: t) }
+        #expect(outbox.statuses.count == afterStop, "取消之后不再发")
+    }
+
+    @Test("通知：连上、手动停止、设备断开立即发；网络断开 3 秒内恢复不发，否则发“断了”和“重新连上”或“没能连上”")
+    func connectionNotices() {
+        var policy = ConnectionNoticePolicy()
+        #expect(policy.update(to: .connecting, now: 0).isEmpty)
+        #expect(policy.update(to: .playing, now: 0.2) == [.connected])
+        #expect(policy.update(to: .connecting, now: 5).isEmpty, "播放中偶尔缓冲：不算断开")
+        #expect(policy.update(to: .playing, now: 5.1).isEmpty)
+
+        // 网络抖一下，2 秒就恢复：什么都不发
+        #expect(policy.update(to: .lost, now: 10).isEmpty)
+        #expect(policy.tick(now: 11.9).isEmpty)
+        #expect(policy.update(to: .playing, now: 12).isEmpty)
+
+        // 断了 3 秒还没恢复：发“断了”；之后重新连上
+        #expect(policy.update(to: .lost, now: 20).isEmpty)
+        #expect(policy.tick(now: 22.9).isEmpty)
+        #expect(policy.tick(now: 23) == [.connectionLost])
+        #expect(policy.tick(now: 30).isEmpty, "只发一次")
+        #expect(policy.update(to: .connecting, now: 31).isEmpty)
+        #expect(policy.update(to: .playing, now: 31.2) == [.reconnected])
+
+        // 断了以后一直没回来：60 秒后回到等待，发“没能重新连上”
+        #expect(policy.update(to: .lost, now: 40).isEmpty)
+        #expect(policy.tick(now: 43) == [.connectionLost])
+        #expect(policy.update(to: .waiting, now: 100) == [.gaveUp])
+
+        // 手动停止、设备断开
+        #expect(policy.update(to: .playing, now: 200) == [.connected])
+        #expect(policy.update(to: .stopped, now: 210) == [.stopped])
+        #expect(policy.update(to: .waiting, now: 270).isEmpty)
+        #expect(policy.update(to: .playing, now: 300) == [.connected])
+        #expect(policy.update(to: .deviceLost, now: 310) == [.deviceLost])
+
+        // 重新缓冲期间到了 3 秒：不发“断了”
+        var buffering = ConnectionNoticePolicy()
+        _ = buffering.update(to: .playing, now: 0)
+        _ = buffering.update(to: .lost, now: 1)
+        _ = buffering.update(to: .connecting, now: 3.5)
+        #expect(buffering.tick(now: 4.5).isEmpty)
+        #expect(buffering.update(to: .playing, now: 4.6).isEmpty)
     }
 }

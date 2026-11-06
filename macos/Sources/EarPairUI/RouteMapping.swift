@@ -17,7 +17,7 @@ extension ReceiverController {
         switch linkState {
         case .waiting, .receiveFailed:
             return RouteNode(symbol: senderSymbol(lastSenderKind), name: waitingSenderName, isPlaceholder: true)
-        case .stopped, .disconnected:
+        case .stopped, .reconnecting, .disconnected:
             return RouteNode(symbol: senderSymbol(senderKind), name: senderDisplayName, isDimmed: true)
         default:
             return RouteNode(symbol: senderSymbol(senderKind), name: senderDisplayName)
@@ -45,6 +45,7 @@ extension ReceiverController {
         case .connecting: return [(.connecting, nil), (.inactive, nil)]
         case .playing: return [(incoming, nil), (outgoing, nil)]
         case .stopped: return [(.inactive, .stopped), (.inactive, nil)]
+        case .reconnecting: return [(.connecting, .reconnecting), (.inactive, nil)]
         case .disconnected: return [(.broken, .disconnected), (.inactive, nil)]
         case .receiveFailed: return [(.failed, .failed("无法接收")), (.inactive, nil)]
         case .outputFailed: return [(incoming, nil), (.failed, .failed("无法播放"))]
@@ -60,6 +61,7 @@ extension ReceiverController {
             if muted { return (.inactive, nil) }
             return (hasSound ? .flowing(Self.intensity(stats.outputLevelDB)) : .quiet, nil)
         case .stopped: return (.inactive, nil) // 面板里只画灰线
+        case .reconnecting: return (.connecting, nil)
         case .disconnected: return (.broken, .disconnected)
         case .receiveFailed: return (.failed, .failed("无法接收"))
         case .outputFailed: return (.failed, .failed("无法播放"))
@@ -86,6 +88,7 @@ extension ReceiverController {
             return muted ? "\(senderDisplayName) 的声音已静音"
                 : "\(senderDisplayName) 到 \(outputDevice?.name ?? "输出设备")，正在播放"
         case .stopped: return "\(senderDisplayName) 已停止发送"
+        case .reconnecting: return "正在重新连接 \(senderDisplayName)"
         case .disconnected: return "\(senderDisplayName) 已断开"
         case .receiveFailed(let message), .outputFailed(let message): return message
         }

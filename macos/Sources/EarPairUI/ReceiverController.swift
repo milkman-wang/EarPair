@@ -60,9 +60,11 @@ public enum LinkState: Equatable, Sendable {
     case connecting
     /// 正在播放；有没有声音看 hasSound
     case playing
-    /// 发送端用 BYE 说它停了（Windows 上关了开关）
+    /// 发送端用 BYE 说它停了（Windows 上关了开关，或者它的音频设备没了）
     case stopped
-    /// 发送端超过 1 秒没包
+    /// 网络断了（1 秒没包，或者发送端联系不上 Mac 自己暂停了），正在主动联系发送端
+    case reconnecting
+    /// 网络断了，但不知道发送端的地址（没发过 HELLO 的旧版发送端），只能等它自己回来
     case disconnected
     /// 监听端口失败
     case receiveFailed(String)
@@ -116,6 +118,10 @@ public final class ReceiverController: ObservableObject {
     public let macName: String
     /// 菜单栏图标（单独发布，见 MenuBarIcon）
     public let menuBarIcon = MenuBarIcon()
+    /// 连上、断开时的系统通知（只在打包好的 App 里有）
+    private var notifier: ConnectionNotifier?
+    private var notices = ConnectionNoticePolicy()
+    private var noticePhase = ConnectionNoticePolicy.Phase.waiting
 
     /// 远端声音的音量，0–2（1 = 100%）
     @Published public var volume: Double {
@@ -236,6 +242,7 @@ public final class ReceiverController: ObservableObject {
         driftCompensation = drift
         lastSenderName = defaults.string(forKey: Keys.lastSenderName)
         lastSenderKind = DeviceKind(protocolValue: defaults.string(forKey: Keys.lastSenderKind))
+        if Bundle.main.bundleIdentifier != nil { notifier = ConnectionNotifier() }
         start()
     }
 
@@ -400,7 +407,7 @@ public final class ReceiverController: ObservableObject {
     /// 这些变了要马上让界面知道；其余（电平、缓冲水位、计数）按 statsPublishInterval 合并
     private static func changesState(from old: ReceiverStats, to new: ReceiverStats) -> Bool {
         old.state != new.state || old.senderAddress != new.senderAddress || old.streamID != new.streamID
-            || old.endedBySender != new.endedBySender || old.format != new.format
+            || old.endReason != new.endReason || old.format != new.format
             || old.packetsLost != new.packetsLost || old.underruns != new.underruns
     }
 
@@ -420,21 +427,32 @@ public final class ReceiverController: ObservableObject {
             switch stats.state {
             case .idle:
                 bufferingSince = nil
-                if stats.senderAddress == nil {
-                    next = .waiting
-                } else {
+                if let address = stats.senderAddress {
                     // 停止或断开 60 秒后回到等待，旧数据不再留在概览上
                     let since = endedAt ?? now
                     endedAt = since
-                    next = now - since > Self.forgetAfter ? .waiting
-                        : stats.endedBySender ? .stopped : .disconnected
+                    if now - since > Self.forgetAfter {
+                        next = .waiting
+                    } else {
+                        switch stats.endReason {
+                        case .stopped?, .device?:
+                            next = .stopped
+                        case .network?, nil:
+                            // 网络问题：60 秒内每秒联系一次发送端，它收到就会马上恢复发送
+                            let reachable = responder?.startReconnecting(to: address, until: since + Self.forgetAfter)
+                            next = reachable == true ? .reconnecting : .disconnected
+                        }
+                    }
+                } else {
+                    next = .waiting
                 }
             case .buffering:
                 endedAt = nil
                 // 播放中偶尔掉进缓冲几十毫秒时不切换，免得闪
                 let since = bufferingSince ?? now
                 bufferingSince = since
-                let fresh = linkState == .waiting || linkState == .stopped || linkState == .disconnected
+                let fresh = linkState == .waiting || linkState == .stopped || linkState == .reconnecting
+                    || linkState == .disconnected
                 next = fresh || now - since > 0.4 ? .connecting : linkState
             case .playing:
                 endedAt = nil
@@ -442,9 +460,32 @@ public final class ReceiverController: ObservableObject {
                 next = .playing
             }
         }
-        if next != linkState { linkState = next }
+        if next != linkState {
+            if linkState == .reconnecting { responder?.stopReconnecting() }
+            linkState = next
+        }
         updateSenderIdentity(address: stats.senderAddress)
         menuBarIcon.update(menuBarSymbol)
+        updateNotices(now: now, endReason: stats.endReason)
+    }
+
+    /// 连上、手动停止、设备没了、网络断开（等一会儿还没恢复才发）、重新连上、放弃重连：发系统通知
+    private func updateNotices(now: Double, endReason: EndReason?) {
+        let phase: ConnectionNoticePolicy.Phase
+        switch linkState {
+        case .waiting, .receiveFailed: phase = .waiting
+        case .connecting: phase = .connecting
+        case .playing, .outputFailed: phase = .playing
+        case .stopped: phase = endReason == .device ? .deviceLost : .stopped
+        case .reconnecting, .disconnected: phase = .lost
+        }
+        var due = notices.tick(now: now)
+        if phase != noticePhase {
+            noticePhase = phase
+            due += notices.update(to: phase, now: now)
+        }
+        guard let notifier, !due.isEmpty else { return }
+        for notice in due { notifier.post(notice, sender: senderDisplayName, output: outputDevice?.name) }
     }
 
     /// 发送端的名字和类型。名字按优先级取：HELLO 里报的 > 反查 IP 得到的 > nil（界面显示 IP）。

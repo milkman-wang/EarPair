@@ -5,11 +5,15 @@ import SwiftUI
 
 // 把菜单栏面板和主窗口各页渲染成 PNG，检查各种状态的布局。
 // 离屏渲染画不出 Liquid Glass（含玻璃的整块会变成空白），所以这里一律用 macOS 14 / 15 的样式，
-// 玻璃效果要看真实窗口。用法：earpair-snapshot [输出目录]
+// 玻璃效果要看真实窗口。
+// 用法：earpair-snapshot [输出目录]
+//       earpair-snapshot --readme [输出目录]   只渲染 README 用的几张图，设备名用通用的名字
 
 setenv("EARPAIR_LEGACY_STYLE", "1", 1)
 
-let outputDirectory = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? "snapshots", isDirectory: true)
+let readmeMode = CommandLine.arguments.contains("--readme")
+let outputDirectory = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first { $0 != "--readme" } ?? "snapshots",
+                          isDirectory: true)
 try? FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 
 let application = NSApplication.shared
@@ -59,9 +63,9 @@ struct Scenario {
     var lastKind: DeviceKind?
 }
 
-func ended(bySender: Bool) -> ReceiverStats {
+func ended(_ reason: EndReason) -> ReceiverStats {
     var stats = streaming(.idle, input: -120, output: -120)
-    stats.endedBySender = bySender
+    stats.endReason = reason
     return stats
 }
 
@@ -74,8 +78,9 @@ let scenarios = [
     Scenario(name: "playing", stats: streaming(.playing, input: -17.6, output: -9.4), link: .playing),
     Scenario(name: "silent", stats: streaming(.playing, input: -120, output: -120), link: .playing, hasSound: false),
     Scenario(name: "muted", stats: streaming(.playing, input: -17.6, output: -120), link: .playing, muted: true),
-    Scenario(name: "stopped", stats: ended(bySender: true), link: .stopped, hasSound: false),
-    Scenario(name: "disconnected", stats: ended(bySender: false), link: .disconnected, hasSound: false),
+    Scenario(name: "stopped", stats: ended(.stopped), link: .stopped, hasSound: false),
+    Scenario(name: "reconnecting", stats: ended(.network), link: .reconnecting, hasSound: false),
+    Scenario(name: "disconnected", stats: ended(.network), link: .disconnected, hasSound: false),
     Scenario(name: "receive-failed", stats: ReceiverStats(),
              link: .receiveFailed("端口 47800 被其他程序占用，收不到 Windows 的声音。"), hasSound: false),
     Scenario(name: "output-failed", stats: streaming(.playing, input: -17.6, output: -120),
@@ -93,8 +98,10 @@ func controller(for scenario: Scenario) -> ReceiverController {
                               lastSenderName: scenario.lastName, lastSenderKind: scenario.lastKind)
 }
 
+/// keepingTop：只保留上面这么高（pt）的部分
 @MainActor
-func render<Content: View>(_ view: Content, name: String, appearance: NSAppearance.Name, size: CGSize?) {
+func render<Content: View>(_ view: Content, name: String, appearance: NSAppearance.Name, size: CGSize?,
+                           keepingTop: CGFloat? = nil) {
     let hosting = NSHostingView(rootView: view.background(Color(nsColor: .windowBackgroundColor)))
     hosting.appearance = NSAppearance(named: appearance)
     hosting.frame = CGRect(origin: .zero, size: size ?? hosting.fittingSize)
@@ -106,12 +113,39 @@ func render<Content: View>(_ view: Content, name: String, appearance: NSAppearan
     hosting.layoutSubtreeIfNeeded()
     guard let bitmap = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else { return }
     hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
+    var output = bitmap
+    if let keepingTop, let image = bitmap.cgImage {
+        let height = Int((keepingTop / hosting.bounds.height * CGFloat(image.height)).rounded())
+        if let top = image.cropping(to: CGRect(x: 0, y: 0, width: image.width, height: height)) {
+            output = NSBitmapImageRep(cgImage: top)
+        }
+    }
     let url = outputDirectory.appendingPathComponent("\(name).png")
-    try? bitmap.representation(using: .png, properties: [:])?.write(to: url)
+    try? output.representation(using: .png, properties: [:])?.write(to: url)
     print(url.path)
 }
 
+/// README 用的图：正在播放，通用的设备名，不带任何个人信息
+@MainActor
+func renderReadmeImages() {
+    let looks: [(String, NSAppearance.Name)] = [("light", .aqua), ("dark", .darkAqua)]
+    for (look, appearance) in looks {
+        let model = ReceiverController(preview: streaming(.playing, input: -17.6, output: -9.4), addresses: addresses,
+                                       bitrateKbps: 1587, history: history(sound: true), linkState: .playing,
+                                       senderName: "DESKTOP-PC", senderKind: .desktop, macName: "MacBook Air",
+                                       outputDevice: OutputDevice(name: "AirPods Pro", transport: .bluetooth))
+        // 窗口最小高 520，概览页的内容到 440 左右就完了，下面的空白不要
+        render(MainWindow(controller: model, initialSection: .overview), name: "mac-window-\(look)",
+               appearance: appearance, size: CGSize(width: 900, height: 560), keepingTop: 440)
+        render(MenuBarContent(controller: model), name: "mac-menu-\(look)", appearance: appearance, size: nil)
+    }
+}
+
 MainActor.assumeIsolated {
+    if readmeMode {
+        renderReadmeImages()
+        exit(0)
+    }
     let looks: [(String, NSAppearance.Name)] = [("light", .aqua), ("dark", .darkAqua)]
     for scenario in scenarios {
         for (look, appearance) in looks {

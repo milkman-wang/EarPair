@@ -188,7 +188,8 @@ public partial class App : Application
         get
         {
 #if DEBUG
-            if (_demo is { } scene) return StatusDescriber.Describe(scene.Snapshot, scene.SwitchOn, scene.Target, false);
+            if (_demo is { } scene)
+                return StatusDescriber.Describe(scene.Snapshot, scene.SwitchOn, scene.Target, false, Demo.PcName, Demo.PcKind);
 #endif
             return StatusDescriber.Describe(Engine.Snapshot, SwitchOn, Settings.Target, _postMuteDismissed);
         }

@@ -45,6 +45,9 @@ public final class ControlResponder: @unchecked Sendable {
     private var info: LocalInfo
     private var peers: [UDPEndpoint: Peer] = [:]
     private var namesByAddress: [String: String] = [:]
+    /// 每个发送端最近一次 HELLO 的来源（地址和端口）：网络断开后往这里联系它
+    private var endpoints: [String: UDPEndpoint] = [:]
+    private var reconnect: (endpoint: UDPEndpoint, until: Double)?
     private var kindsByAddress: [String: DeviceKind] = [:]
     private var lastStatusAt = -Double.infinity
 
@@ -68,6 +71,21 @@ public final class ControlResponder: @unchecked Sendable {
         lock.withLock { kindsByAddress[address] }
     }
 
+    /// 网络断开后主动联系发送端：到 deadline 之前，每秒往它最近一次 HELLO 的来源发一个 STATUS。
+    /// 发送端如果因为联系不上 Mac 暂停了，收到就会马上恢复发送。不知道它的地址（没发过 HELLO）时返回 false
+    @discardableResult
+    public func startReconnecting(to address: String, until deadline: Double) -> Bool {
+        lock.withLock {
+            guard let endpoint = endpoints[address] else { return false }
+            reconnect = (endpoint, deadline)
+            return true
+        }
+    }
+
+    public func stopReconnecting() {
+        lock.withLock { reconnect = nil }
+    }
+
     // MARK: - 接收线程
 
     public func handle(_ bytes: UnsafeRawBufferPointer, from sender: UDPEndpoint, now: Double) {
@@ -77,13 +95,16 @@ public final class ControlResponder: @unchecked Sendable {
             guard let hello = ControlPacket.decode(HelloMessage.self, from: body) else { return }
             lock.withLock {
                 peers[sender] = Peer(name: hello.name, stream: hello.stream ?? 0, lastSeen: now)
+                endpoints[sender.address] = sender
                 if let name = hello.name, !name.isEmpty { namesByAddress[sender.address] = name }
                 if let kind = DeviceKind(protocolValue: hello.kind) { kindsByAddress[sender.address] = kind }
             }
             reply(to: sender, now: now)
         case .bye:
             guard let bye = ControlPacket.decode(ByeMessage.self, from: body) else { return }
-            if let stream = bye.stream { core.endStream(stream, from: sender.address) }
+            if let stream = bye.stream {
+                core.endStream(stream, from: sender.address, reason: EndReason(byeReason: bye.reason))
+            }
             _ = lock.withLock { peers.removeValue(forKey: sender) }
         case .status:
             break // 接收端不处理 STATUS
@@ -93,11 +114,13 @@ public final class ControlResponder: @unchecked Sendable {
     public func tick(now: Double) {
         guard now - lastStatusAt >= Self.statusInterval else { return }
         lastStatusAt = now
-        let active: [UDPEndpoint] = lock.withLock {
+        let (active, target): ([UDPEndpoint], UDPEndpoint?) = lock.withLock {
             peers = peers.filter { now - $0.value.lastSeen < 30 }
-            return peers.filter { now - $0.value.lastSeen < Self.peerTimeout }.map(\.key)
+            if let current = reconnect, now >= current.until { reconnect = nil }
+            return (peers.filter { now - $0.value.lastSeen < Self.peerTimeout }.map(\.key), reconnect?.endpoint)
         }
         for peer in active { reply(to: peer, now: now) }
+        if let target, !active.contains(target) { reply(to: target, now: now) }
     }
 
     private func reply(to peer: UDPEndpoint, now: Double) {

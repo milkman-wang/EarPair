@@ -132,6 +132,10 @@ void TestControlPacket()
     byte[] bye = ControlPacket.Encode(new ByeMessage(16909060));
     byte[] expected = System.Convert.FromHexString("4541524301051300" + "7b2273747265616d223a31363930393036307d");
     Check(bye.AsSpan().SequenceEqual(expected), "BYE 和协议文档里的测试向量逐字节一致");
+    byte[] byeWithReason = ControlPacket.Encode(new ByeMessage(7, ByeReason.Network));
+    Check(ControlPacket.TryParse(byeWithReason, out _, out ReadOnlySpan<byte> byeBody) &&
+          System.Text.Encoding.UTF8.GetString(byeBody) == """{"stream":7,"reason":"network"}""",
+          "BYE 带上 reason（network：联系不上 Mac 自己暂停）");
 
     byte[] probe = ControlPacket.Encode(new HelloMessage(null, null, null, null, 1));
     Check(probe.AsSpan().SequenceEqual(System.Convert.FromHexString("4541524301030c00" + "7b2273747265616d223a317d")),
