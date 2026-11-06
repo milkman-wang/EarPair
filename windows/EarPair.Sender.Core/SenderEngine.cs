@@ -80,6 +80,8 @@ public sealed record SenderSnapshot(
     public bool PostMuteFallback { get; init; }
     /// <summary>刚开始或刚恢复（3 秒内）：界面显示“正在连接”，不急着下结论</summary>
     public bool Fresh { get; init; }
+    /// <summary>待机：电脑没有声音，暂停发音频包，只和 Mac 保持握手（Sending 的一种情况）</summary>
+    public bool Standby { get; init; }
 }
 
 public sealed record AudioDeviceInfo(string Id, string Name, bool IsDefault);
@@ -94,6 +96,10 @@ public sealed class SenderEngine : IDisposable
     public const int DefaultPort = 47800;
     private static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(250);
     private static readonly double[] RetryDelays = [1, 2, 5, 10];
+    /// <summary>连续这么久没有声音就待机（秒）</summary>
+    private const double StandbyAfter = 3;
+    /// <summary>16-bit 峰值超过这个才算有声音（约 −80 dBFS）。没有程序在放声音时，loopback 采到的是全 0</summary>
+    private const int SoundThreshold = 3;
 
     private readonly BlockingCollection<Action> _work = new();
     private readonly Thread _thread;
@@ -131,6 +137,21 @@ public sealed class SenderEngine : IDisposable
     private double _othersCheckedAt = double.NegativeInfinity;
     /// <summary>静音之后还采到过声音：这台设备静音不影响采集，不用再查</summary>
     private bool _muteVerified;
+    /// <summary>进入待机时下一个包的序号（HELLO 里告诉 Mac）</summary>
+    private uint _standbySeq;
+    /// <summary>这个时间之前不待机：Mac 丢了这一路流，先照常发一会儿让它接上</summary>
+    private double _activeUntil = double.NegativeInfinity;
+    /// <summary>最近一次从待机恢复的时间</summary>
+    private double _resumedAt = double.NegativeInfinity;
+
+    // 待机：电脑没有声音时不发音频包、只发 HELLO。引擎线程决定进入待机，采集线程一有声音就自己恢复，
+    // 两边在 _sendGate 里交接：进入待机前在锁里再确认一次没有声音，免得刚有声音就被停掉
+    private readonly object _sendGate = new();
+    private volatile bool _standby;
+    /// <summary>最近一次采到声音的时间（Stopwatch 时间戳，采集线程写）</summary>
+    private long _lastSoundAt;
+    /// <summary>最近一次采到数据的时间（不管有没有声音）</summary>
+    private long _lastCaptureAt;
 
     // 采集线程写、任意线程读
     private float _peakLeft;
@@ -361,10 +382,27 @@ public sealed class SenderEngine : IDisposable
             AudioCapture capture = _capture;
             PacketEncoder encoder = _encoder;
             UdpSender udp = _udp!;
+            lock (_sendGate) _standby = false;
+            Volatile.Write(ref _lastSoundAt, Stopwatch.GetTimestamp()); // 开始后至少发 StandbyAfter 秒
+            _activeUntil = double.NegativeInfinity;
             capture.FramesCaptured += (samples, frames) =>
             {
-                UpdatePeak(samples, frames);
-                encoder.Append(samples.AsSpan(0, frames * 2), udp.Send);
+                bool sound = UpdatePeak(samples, frames) > SoundThreshold;
+                bool resumed = false;
+                lock (_sendGate)
+                {
+                    long now = Stopwatch.GetTimestamp();
+                    Volatile.Write(ref _lastCaptureAt, now);
+                    if (sound)
+                    {
+                        Volatile.Write(ref _lastSoundAt, now);
+                        resumed = _standby;
+                        _standby = false;
+                    }
+                    // 待机时没声音就不发（Mac 知道，不当成断开）；有声音了这一批接着发，不等引擎线程
+                    if (!_standby) encoder.Append(samples.AsSpan(0, frames * 2), udp.Send);
+                }
+                if (resumed) Post(() => OnResumed(encoder));
             };
             capture.Stopped += ex => Post(() => OnCaptureStopped(capture, ex));
             _deviceId = device.ID;
@@ -391,9 +429,14 @@ public sealed class SenderEngine : IDisposable
         if (_udp is not null && _udpTarget == (settings.Host, settings.Port)) return;
         ReleaseSocket();
         var udp = new UdpSender(settings.Host, settings.Port, receive: true);
-        udp.ControlReceived += packet => Post(() => OnControl(packet));
+        // 换了 Mac 以后，旧套接字上还在路上的包不算新 Mac 的
+        udp.ControlReceived += packet => Post(() =>
+        {
+            if (ReferenceEquals(udp, _udp)) OnControl(packet);
+        });
         udp.PortUnreachable += () => Post(() =>
         {
+            if (!ReferenceEquals(udp, _udp)) return;
             _unreachableAt = Now;
             Publish();
         });
@@ -456,6 +499,13 @@ public sealed class SenderEngine : IDisposable
 
         if (first) Log?.Invoke($"Mac 回传：{status.Name}（{status.App}）");
 
+        if (_standby && _state == SenderState.Sending && !status.IsBusy)
+        {
+            if (!status.SupportsStandby || status.IsIdle) WakeForMac();
+            else if (status.Stream == _streamId && (status.IsPlaying || status.IsBuffering))
+                _nextHelloAt = 0; // Mac 还没收到待机的 HELLO（丢了）：下一次 tick 马上补发
+        }
+
         if (status.IsBusy)
         {
             if (_state == SenderState.Sending) Pause(ByeReason.Busy);
@@ -484,11 +534,9 @@ public sealed class SenderEngine : IDisposable
 
         if (_state is SenderState.Sending or SenderState.WaitingForMac && now >= _nextHelloAt && _udp is not null)
         {
-            bool sending = _state == SenderState.Sending;
-            _udp.SendControl(ControlPacket.Encode(new HelloMessage(settings.SenderId, settings.SenderName,
-                                                                   settings.SenderKind, settings.App,
-                                                                   sending ? _streamId : 0)));
-            _nextHelloAt = now + (sending ? 2 : now < _fastProbeUntil ? 1 : 3);
+            SendHello(settings);
+            // 待机时没有音频包，Mac 只能靠 HELLO 知道我们还在：每秒一次，丢几个也不会被当成断开
+            _nextHelloAt = now + (_state == SenderState.Sending ? (_standby ? 1 : 2) : now < _fastProbeUntil ? 1 : 3);
         }
 
         if (_state == SenderState.Sending && _replies && !settings.IgnoreSilence)
@@ -498,7 +546,72 @@ public sealed class SenderEngine : IDisposable
             if (silence > 10) Pause(ByeReason.Network);
         }
 
-        if (_state == SenderState.Sending) CheckPostMuteCapture(now);
+        if (_state == SenderState.Sending)
+        {
+            CheckPostMuteCapture(now);
+            EnterStandbyIfSilent(now, settings);
+        }
+        Publish();
+    }
+
+    /// <summary>HELLO：我是谁、在发哪个流；待机时带上 standby 和恢复后第一个包的序号</summary>
+    private void SendHello(SenderSettings settings)
+    {
+        if (_udp is null) return;
+        bool sending = _state == SenderState.Sending;
+        var hello = new HelloMessage(settings.SenderId, settings.SenderName, settings.SenderKind, settings.App,
+                                     sending ? _streamId : 0);
+        if (sending && _standby) hello = hello with { Standby = true, Seq = _standbySeq };
+        _udp.SendControl(ControlPacket.Encode(hello));
+    }
+
+    // MARK: - 待机
+
+    /// <summary>
+    /// 连续 StandbyAfter 秒没有声音、Mac 也认得待机：停发音频包，只发 HELLO（带 standby）。
+    /// 省电省流量：没声音时不再每秒发 200 个全是 0 的包。有声音时采集线程自己恢复（见 Restart 里的回调）。
+    /// </summary>
+    private void EnterStandbyIfSilent(double now, SenderSettings settings)
+    {
+        if (_standby || now < _activeUntil || _encoder is not { } encoder) return;
+        // Mac 刚回过 STATUS（3 秒内）、认得待机、而且确实在收这一路流，才待机。
+        // 旧版 Mac、刚换的 Mac 还没回过、或者 Mac 收不了我们的流时一直发，不来回切换
+        if (_remote is not { SupportsStandby: true } remote || now - _remoteAt > 3 || remote.Stream != _streamId ||
+            !(remote.IsPlaying || remote.IsBuffering || remote.IsStandby)) return;
+        lock (_sendGate)
+        {
+            if (_standby || Stopwatch.GetElapsedTime(Volatile.Read(ref _lastSoundAt)).TotalSeconds < StandbyAfter) return;
+            _standby = true;
+            _standbySeq = encoder.NextSequence;
+        }
+        // 先告诉 Mac（它只剩 60 ms 缓冲），再写日志；下一个 tick 再发一份，丢一个也不要紧
+        SendHello(settings);
+        _nextHelloAt = now + 0.25;
+        Log?.Invoke("没有声音，待机：暂停发音频，只保留握手");
+        Publish();
+    }
+
+    /// <summary>待机中又有声音了（采集线程已经接着发包）：马上发 HELLO，界面也跟着变</summary>
+    private void OnResumed(PacketEncoder encoder)
+    {
+        if (encoder != _encoder || _settings is null || _state != SenderState.Sending) return;
+        _resumedAt = Now;
+        // 下一个 tick 再发 HELLO：那时 Mac 已经攒够 60 ms 缓冲，回的是“正在播放”而不是“缓冲中”
+        _nextHelloAt = Now + 0.25;
+        Log?.Invoke("有声音了，恢复发送");
+        Publish();
+    }
+
+    /// <summary>
+    /// 待机中 Mac 说它没有这一路流（比如 Mac 上的 EarPair 重新打开过），或者不再认得待机：
+    /// 退出待机，先照常发 1 秒（静音也发），Mac 接上之后再待机。采集没有数据（没有静音保活）时发了也没用，不折腾
+    /// </summary>
+    private void WakeForMac()
+    {
+        if (Stopwatch.GetElapsedTime(Volatile.Read(ref _lastCaptureAt)).TotalSeconds > 0.5) return;
+        lock (_sendGate) _standby = false;
+        _activeUntil = Now + 1;
+        Log?.Invoke("Mac 那边没有这一路流，先恢复发送让它接上");
         Publish();
     }
 
@@ -577,6 +690,7 @@ public sealed class SenderEngine : IDisposable
     private void TearDown()
     {
         _retryAt = double.PositiveInfinity;
+        lock (_sendGate) _standby = false;
         AudioCapture? capture = _capture;
         _capture = null;
         if (capture is not null)
@@ -634,15 +748,20 @@ public sealed class SenderEngine : IDisposable
         }
         else if (_replies && now - _remoteAt <= 3) health = RemoteHealth.Ok;
 
+        StatusMessage? remote = now - _remoteAt < 6 ? _remote : null;
+        // 刚从待机恢复的 1.5 秒里，Mac 还在攒缓冲（或者还没收到恢复的包）：照样算正在播放，界面不闪“正在连接”
+        if (!_standby && now - _resumedAt < 1.5 && remote is { IsBuffering: true } or { IsStandby: true })
+            remote = remote with { State = "playing" };
         var next = new SenderSnapshot(_state, _error, _deviceId, _deviceName, capture?.FormatDescription,
                                       capture?.SampleRate ?? 0, capture?.ChannelCount ?? 0, 0, 0, 0, _settings)
         {
             Health = health,
-            Remote = now - _remoteAt < 6 ? _remote : null,
+            Remote = remote,
             PortUnreachable = now - _unreachableAt < 5,
             LocalMuted = _mute?.MutedByUs == true,
             PostMuteFallback = _postMuteFallback,
             Fresh = now < _freshUntil,
+            Standby = _standby && _state == SenderState.Sending,
         };
         SenderSnapshot previous = _snapshot;
         _snapshot = next;
@@ -653,7 +772,8 @@ public sealed class SenderEngine : IDisposable
     private static bool SameView(SenderSnapshot a, SenderSnapshot b) =>
         a.State == b.State && a.Error == b.Error && a.DeviceName == b.DeviceName && a.Health == b.Health &&
         a.PortUnreachable == b.PortUnreachable && a.LocalMuted == b.LocalMuted &&
-        a.PostMuteFallback == b.PostMuteFallback && a.Fresh == b.Fresh && a.Settings == b.Settings &&
+        a.PostMuteFallback == b.PostMuteFallback && a.Fresh == b.Fresh && a.Standby == b.Standby &&
+        a.Settings == b.Settings &&
         SameRemote(a.Remote, b.Remote);
 
     /// <summary>
@@ -664,7 +784,8 @@ public sealed class SenderEngine : IDisposable
         ReferenceEquals(x, y) || x is not null && y is not null && x.State == y.State && x.BusyName == y.BusyName &&
         x.Name == y.Name && x.Kind == y.Kind && x.Output == y.Output && x.Transport == y.Transport && x.Muted == y.Muted;
 
-    private void UpdatePeak(short[] samples, int frames)
+    /// <summary>更新电平表和静音检查用的峰值；返回这一批的峰值（16-bit）</summary>
+    private int UpdatePeak(short[] samples, int frames)
     {
         int left = 0, right = 0;
         for (int i = 0; i < frames * 2; i += 2)
@@ -677,6 +798,7 @@ public sealed class SenderEngine : IDisposable
         RaiseTo(ref _peakLeft, left / 32768f);
         RaiseTo(ref _peakRight, right / 32768f);
         RaiseTo(ref _peakForMuteCheck, Math.Max(left, right) / 32768f);
+        return Math.Max(left, right);
     }
 
     private static void RaiseTo(ref float target, float level)

@@ -69,14 +69,20 @@ public struct HelloMessage: Codable, Equatable, Sendable {
     public var kind: String?
     public var app: String?
     public var stream: UInt32?
+    /// 待机：发送端那边没有声音，这一路流暂停发包，只保留握手
+    public var standby: Bool?
+    /// 待机时：恢复后第一个包的序号。比它小的包是暂停前发出、晚到的
+    public var seq: UInt32?
 
     public init(sender: String? = nil, name: String? = nil, kind: String? = nil, app: String? = nil,
-                stream: UInt32? = nil) {
+                stream: UInt32? = nil, standby: Bool? = nil, seq: UInt32? = nil) {
         self.sender = sender
         self.name = name
         self.kind = kind
         self.app = app
         self.stream = stream
+        self.standby = standby
+        self.seq = seq
     }
 }
 
@@ -88,8 +94,10 @@ public struct StatusMessage: Codable, Equatable, Sendable {
     public var kind: String?
     public var app: String?
     public var stream: UInt32?
-    /// buffering / playing / idle / busy
+    /// buffering / playing / standby / idle / busy
     public var state: String?
+    /// 接收端支持的功能：standby（发送端没声音时可以停发音频包，只保留握手）
+    public var features: [String]?
     public var busyName: String?
     public var bufferMs: Double?
     public var targetMs: Double?

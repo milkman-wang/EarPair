@@ -30,6 +30,9 @@ public sealed class PacketEncoder
         _pending = new short[framesPerPacket * Channels];
     }
 
+    /// <summary>下一个包的序号</summary>
+    public uint NextSequence => _sequence;
+
     /// <summary>追加交错立体声帧；每凑满一个包就调用一次 send(包缓冲, 长度)。</summary>
     public void Append(ReadOnlySpan<short> interleaved, Action<byte[], int> send)
     {

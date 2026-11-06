@@ -37,6 +37,8 @@ public final class ControlResponder: @unchecked Sendable {
 
     /// 多久没收到 HELLO 就不再回 STATUS
     static let peerTimeout = 6.0
+    /// 写进 STATUS 的功能：发送端看到 standby 才会在没声音时停发音频包
+    static let features = ["standby"]
     static let statusInterval = 1.0
 
     private let core: ReceiverCore
@@ -99,6 +101,9 @@ public final class ControlResponder: @unchecked Sendable {
                 if let name = hello.name, !name.isEmpty { namesByAddress[sender.address] = name }
                 if let kind = DeviceKind(protocolValue: hello.kind) { kindsByAddress[sender.address] = kind }
             }
+            if hello.standby == true, let stream = hello.stream, stream != 0 {
+                core.enterStandby(stream: stream, from: sender.address, resumeSequence: hello.seq, now: now)
+            }
             reply(to: sender, now: now)
         case .bye:
             guard let bye = ControlPacket.decode(ByeMessage.self, from: body) else { return }
@@ -141,9 +146,14 @@ public final class ControlResponder: @unchecked Sendable {
         status.transport = local.transport
         status.muted = local.muted
         status.volume = local.volume
+        status.features = Self.features
         if stats.state != .idle, let current = stats.senderAddress {
             if current == address {
-                status.state = stats.state == .playing ? "playing" : "buffering"
+                switch stats.state {
+                case .playing: status.state = "playing"
+                case .standby: status.state = "standby"
+                case .buffering, .idle: status.state = "buffering"
+                }
                 status.stream = stats.streamID
                 status.bufferMs = (stats.bufferedMs * 10).rounded() / 10
                 status.targetMs = stats.targetMs

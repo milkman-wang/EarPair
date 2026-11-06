@@ -79,9 +79,16 @@ internal static class Program
 
         Console.WriteLine("EarPair 发送端 0.2");
         SenderSnapshot? shown = null;
+        bool standbyShown = false;
         engine.Changed += () =>
         {
             SenderSnapshot s = engine.Snapshot;
+            if (s.Standby != standbyShown)
+            {
+                standbyShown = s.Standby;
+                if (s.Standby) Console.WriteLine("  待机：没有声音，暂停发包，只保留握手");
+                else if (s.State == SenderState.Sending) Console.WriteLine("  恢复发送");
+            }
             if (shown is not null && shown.State == s.State && shown.DeviceName == s.DeviceName && shown.Error == s.Error)
                 return;
             shown = s;

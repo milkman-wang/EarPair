@@ -138,6 +138,12 @@ public static class StatusDescriber
                     notice = new NoticeView(s.PortUnreachable ? "Mac 上的 EarPair 没有打开" : "连不上 Mac", NoticeKind.Warning);
                     glyph = TrayGlyph.Warn;
                     break;
+                case SenderState.Sending when s.Standby:
+                    // 电脑没有声音：只和 Mac 保持握手，不发音频（连线上没有光点）
+                    title = "待机";
+                    path = new PathView(pc, LinkLook.Flowing, macNode, LinkLook.Flowing, Output(muted: remote?.Muted == true));
+                    glyph = TrayGlyph.On;
+                    break;
                 case SenderState.Sending when remote is { IsPlaying: true, Muted: true }:
                     title = "Mac 上已静音";
                     path = new PathView(pc, LinkLook.Flowing, macNode, LinkLook.Inactive, Output(muted: true));

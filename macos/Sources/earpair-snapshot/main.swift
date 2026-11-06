@@ -77,6 +77,7 @@ let scenarios = [
              hasSound: false),
     Scenario(name: "playing", stats: streaming(.playing, input: -17.6, output: -9.4), link: .playing),
     Scenario(name: "silent", stats: streaming(.playing, input: -120, output: -120), link: .playing, hasSound: false),
+    Scenario(name: "standby", stats: streaming(.standby, input: -120, output: -120), link: .standby, hasSound: false),
     Scenario(name: "muted", stats: streaming(.playing, input: -17.6, output: -120), link: .playing, muted: true),
     Scenario(name: "stopped", stats: ended(.stopped), link: .stopped, hasSound: false),
     Scenario(name: "reconnecting", stats: ended(.network), link: .reconnecting, hasSound: false),
@@ -168,7 +169,7 @@ MainActor.assumeIsolated {
         }
     }
     // 连接页的“已停止”和带上次名字的等待
-    for scenario in scenarios where ["stopped", "waiting-remembered"].contains(scenario.name) {
+    for scenario in scenarios where ["stopped", "waiting-remembered", "standby"].contains(scenario.name) {
         render(MainWindow(controller: controller(for: scenario), initialSection: .connection),
                name: "window-connection-\(scenario.name)-light", appearance: .aqua, size: CGSize(width: 900, height: 640))
     }

@@ -60,6 +60,8 @@ public enum LinkState: Equatable, Sendable {
     case connecting
     /// 正在播放；有没有声音看 hasSound
     case playing
+    /// 发送端那边没有声音，暂停发包，只保留握手（省电）；有声音时马上接着放
+    case standby
     /// 发送端用 BYE 说它停了（Windows 上关了开关，或者它的音频设备没了）
     case stopped
     /// 网络断了（1 秒没包，或者发送端联系不上 Mac 自己暂停了），正在主动联系发送端
@@ -392,7 +394,9 @@ public final class ReceiverController: ObservableObject {
         if ticks % Self.historyInterval == 0 && current.isStreaming {
             let lost = max(0, current.packetsLost - lastHistoryLost)
             let underruns = max(0, current.underruns - lastHistoryUnderruns)
-            history.append(HistoryPoint(id: ticks, bufferMs: current.bufferedMs, jitterMs: current.jitterMs,
+            // 待机时缓冲是空的：曲线保持上一个值，不画成掉到 0
+            let bufferMs = current.state == .standby ? history.last?.bufferMs ?? current.targetMs : current.bufferedMs
+            history.append(HistoryPoint(id: ticks, bufferMs: bufferMs, jitterMs: current.jitterMs,
                                         inputLevelDB: current.inputLevelDB,
                                         outputLevelDB: muted ? -120 : current.outputLevelDB,
                                         packetsLost: history.isEmpty ? 0 : lost,
@@ -458,6 +462,10 @@ public final class ReceiverController: ObservableObject {
                 endedAt = nil
                 bufferingSince = nil
                 next = .playing
+            case .standby:
+                endedAt = nil
+                bufferingSince = nil
+                next = .standby
             }
         }
         if next != linkState {
@@ -475,7 +483,7 @@ public final class ReceiverController: ObservableObject {
         switch linkState {
         case .waiting, .receiveFailed: phase = .waiting
         case .connecting: phase = .connecting
-        case .playing, .outputFailed: phase = .playing
+        case .playing, .standby, .outputFailed: phase = .playing // 待机还是连着的，进出待机都不发通知
         case .stopped: phase = endReason == .device ? .deviceLost : .stopped
         case .reconnecting, .disconnected: phase = .lost
         }

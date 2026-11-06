@@ -14,7 +14,7 @@ struct OverviewPane: View {
     /// 波形只在有流的时候出现
     private var showsWaveform: Bool {
         switch controller.linkState {
-        case .connecting, .playing, .outputFailed: return true
+        case .connecting, .playing, .standby, .outputFailed: return true
         case .waiting, .stopped, .reconnecting, .disconnected, .receiveFailed: return false
         }
     }
@@ -23,7 +23,7 @@ struct OverviewPane: View {
     private var showsHealth: Bool {
         switch controller.linkState {
         case .waiting, .receiveFailed: return false
-        case .connecting, .playing, .outputFailed, .stopped, .reconnecting, .disconnected: return true
+        case .connecting, .playing, .standby, .outputFailed, .stopped, .reconnecting, .disconnected: return true
         }
     }
 
@@ -58,7 +58,7 @@ struct OverviewPane: View {
                 LabeledContent("音量") { VolumeRow(controller: controller, style: .form) }
                 LabeledContent("音量平衡") {
                     HStack(spacing: 10) {
-                        if controller.autoLevel && controller.linkState == .playing {
+                        if controller.autoLevel && (controller.linkState == .playing || controller.linkState == .standby) {
                             Text(verbatim: Format.signedDecibels(controller.stats.levelingGainDB))
                                 .monospacedDigit()
                                 .foregroundStyle(.secondary)
@@ -91,9 +91,12 @@ struct HealthRow: View {
     var body: some View {
         let stats = controller.stats
         let history = controller.history
+        // 待机时没有在收，缓冲是空的，不是出了问题
+        let standby = stats.state == .standby
         HStack(spacing: 0) {
-            MetricColumn(title: "缓冲", value: stats.bufferedMs, text: "\(Int(stats.bufferedMs.rounded()))", unit: "ms",
-                         tone: stats.bufferedMs < stats.targetMs / 2 ? .warning : .normal,
+            MetricColumn(title: "缓冲", value: standby ? 0 : stats.bufferedMs,
+                         text: standby ? "—" : "\(Int(stats.bufferedMs.rounded()))", unit: standby ? "" : "ms",
+                         tone: standby ? .calm : stats.bufferedMs < stats.targetMs / 2 ? .warning : .normal,
                          spark: Sparkline(values: history.map(\.bufferMs), kind: .line,
                                           ceiling: stats.targetMs * 2, tint: .secondary))
             Divider().padding(.horizontal, 14)
@@ -137,7 +140,7 @@ struct SoundPane: View {
                     .fixedSize()
                 }
                 .disabled(!controller.autoLevel)
-                if controller.autoLevel && stats.state == .playing {
+                if controller.autoLevel && (stats.state == .playing || stats.state == .standby) {
                     LabeledContent("当前增益") {
                         Text(verbatim: Format.signedDecibels(stats.levelingGainDB))
                             .monospacedDigit()
@@ -210,7 +213,8 @@ struct NetworkPane: View {
                 LabeledContent("时钟偏差") {
                     Text(verbatim: driftText(stats))
                         .monospacedDigit()
-                        .foregroundStyle(stats.state == .playing && stats.secondsPlayed >= 60 ? .secondary : .tertiary)
+                        .foregroundStyle((stats.state == .playing || stats.state == .standby) && stats.secondsPlayed >= 60
+                                         ? .secondary : .tertiary)
                 }
             }
         }
@@ -285,7 +289,7 @@ struct ConnectionPane: View {
                                     title: controller.waitingSenderName, isPlaceholder: true) {
                         StatusPill(state: controller.linkState)
                     }
-                case .connecting, .playing, .stopped, .reconnecting, .disconnected, .outputFailed:
+                case .connecting, .playing, .standby, .stopped, .reconnecting, .disconnected, .outputFailed:
                     DeviceHeaderRow(symbol: senderSymbol(controller.senderKind), title: controller.senderDisplayName) {
                         StatusPill(state: controller.linkState)
                     }
@@ -312,6 +316,6 @@ struct ConnectionPane: View {
 
 func driftText(_ stats: ReceiverStats) -> String {
     guard stats.isStreaming else { return "—" }
-    if stats.state == .playing && stats.secondsPlayed < 60 { return "测量中…" }
+    if (stats.state == .playing || stats.state == .standby) && stats.secondsPlayed < 60 { return "测量中…" }
     return Format.ppm(stats.driftPPM)
 }

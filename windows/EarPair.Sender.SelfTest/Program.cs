@@ -147,12 +147,23 @@ void TestControlPacket()
           System.Text.Encoding.UTF8.GetString(helloBody).Contains("\"kind\":\"desktop\""),
           "HELLO 带上 kind，能解析回来");
 
+    byte[] standby = ControlPacket.Encode(new HelloMessage(null, null, null, null, 7) { Standby = true, Seq = 42 });
+    Check(ControlPacket.TryParse(standby, out _, out ReadOnlySpan<byte> standbyBody) &&
+          System.Text.Encoding.UTF8.GetString(standbyBody) == """{"stream":7,"standby":true,"seq":42}""",
+          "待机的 HELLO 带上 standby 和恢复后第一个包的序号");
+
     byte[] status = ControlPacket.Encode(ControlPacket.Kind.Status, System.Text.Encoding.UTF8.GetBytes(
         """{"id":"5f0e","name":"MacBook Air","kind":"laptop","stream":7,"state":"playing","lost":2,"output":"耳机","transport":"headphones","new":[1]}"""));
     StatusMessage? parsed = ControlPacket.ParseStatus(status);
     Check(parsed is { Name: "MacBook Air", Kind: "laptop", Stream: 7, IsPlaying: true, Lost: 2, Output: "耳机",
                       Transport: "headphones" },
           "STATUS 能解析（kind、headphones），不认识的字段忽略");
+
+    Check(parsed is { SupportsStandby: false }, "没有 features 的 STATUS（旧版 Mac）不认得待机");
+    StatusMessage? standbyStatus = ControlPacket.ParseStatus(ControlPacket.Encode(ControlPacket.Kind.Status,
+        System.Text.Encoding.UTF8.GetBytes("""{"stream":7,"state":"standby","features":["standby","later"]}""")));
+    Check(standbyStatus is { IsStandby: true, SupportsStandby: true, IsPlaying: false },
+          "STATUS 的 features 里有 standby：Mac 认得待机");
 
     byte[] wrongLength = status.Concat(new byte[] { 0x20 }).ToArray();
     Check(ControlPacket.ParseStatus(wrongLength) is null, "长度不符的包丢掉");

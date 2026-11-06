@@ -17,7 +17,7 @@ internal static class Demo
     public const string PcKind = "desktop";
 
     public static readonly string[] Names =
-        ["pick", "off", "connecting", "playing", "muted", "legacy", "noresponse", "waiting", "busy", "nosource", "failed", "postmute"];
+        ["pick", "off", "connecting", "playing", "standby", "muted", "legacy", "noresponse", "waiting", "busy", "nosource", "failed", "postmute"];
 
     public static IEnumerable<DiscoveredMac> Macs =>
     [
@@ -39,10 +39,12 @@ internal static class Demo
         const float loud = 0.25f; // −12 dBFS
 
         SenderSnapshot Snapshot(SenderState state, RemoteHealth health = RemoteHealth.Unknown, StatusMessage? remote = null,
-                                string? error = null, bool fresh = false, bool unreachable = false, bool postMute = false) =>
+                                string? error = null, bool fresh = false, bool unreachable = false, bool postMute = false,
+                                bool standby = false) =>
             new(state, error, "demo", "扬声器 (Realtek(R) Audio)", "48000 Hz，2 声道，32-bit 浮点", 48000, 2, 0, 0, 0, settings)
             {
                 Health = health, Remote = remote, Fresh = fresh, PortUnreachable = unreachable, PostMuteFallback = postMute,
+                Standby = standby,
             };
 
         return name switch
@@ -52,6 +54,8 @@ internal static class Demo
             "connecting" => new Scene(Snapshot(SenderState.Sending, RemoteHealth.Ok, playing with { State = "buffering" }),
                                       true, mac, 0),
             "playing" => new Scene(Snapshot(SenderState.Sending, RemoteHealth.Ok, playing), true, mac, loud),
+            "standby" => new Scene(Snapshot(SenderState.Sending, RemoteHealth.Ok, playing with { State = "standby" },
+                                            standby: true), true, mac, 0),
             "muted" => new Scene(Snapshot(SenderState.Sending, RemoteHealth.Ok, playing with { Muted = true }), true, mac, loud),
             "legacy" => new Scene(Snapshot(SenderState.Sending), true,
                                   new MacTarget { Name = "MacBook-Pro.local", Host = "192.168.1.30" }, loud),

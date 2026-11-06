@@ -276,3 +276,130 @@ struct ControlPacketTests {
         #expect(buffering.update(to: .playing, now: 4.6).isEmpty)
     }
 }
+
+@Suite("待机（发送端没有声音时停发音频包）")
+struct StandbyTests {
+    private let pc = "10.0.0.2"
+
+    /// 播放 0.2 秒（0–39 号包），然后发送端说待机：恢复后第一个包是 40 号
+    private func playThenStandby(_ core: ReceiverCore, _ factory: PacketFactory) {
+        for i in 0..<40 {
+            core.ingest(factory.packet(i), from: pc, at: Double(i) * 0.005)
+            _ = core.renderStereo(240)
+        }
+        #expect(core.statistics(now: 0.2).state == .playing)
+        core.enterStandby(stream: factory.streamID, from: pc, resumeSequence: 40, now: 0.21)
+    }
+
+    /// 40 号包起接着发（发送端停了一会儿，序号和采样时间是接着的）
+    private func resume(_ core: ReceiverCore, _ factory: PacketFactory, at start: Double) {
+        for i in 40..<60 {
+            core.ingest(factory.packet(i), from: pc, at: start + Double(i - 40) * 0.005)
+            _ = core.renderStereo(240)
+        }
+    }
+
+    @Test("待机时不按 1 秒没包算断开、不算卡顿；6 秒收不到 HELLO 才算网络断开")
+    func standbyKeepsStream() {
+        let core = makeCore()
+        let factory = PacketFactory()
+        playThenStandby(core, factory)
+        let underruns = core.statistics(now: 0.21).underruns
+        for t in stride(from: 0.3, through: 5.0, by: 0.1) {
+            _ = core.renderStereo(480)
+            core.housekeeping(now: t)
+        }
+        #expect(core.statistics(now: 5).state == .standby)
+        #expect(core.statistics(now: 5).underruns == underruns, "待机不算卡顿")
+        core.enterStandby(stream: factory.streamID, from: pc, resumeSequence: 40, now: 5) // 每 2 秒一次的 HELLO
+        core.housekeeping(now: 10.9)
+        #expect(core.statistics(now: 10.9).state == .standby, "上次 HELLO 之后还不到 6 秒")
+        core.housekeeping(now: 11.1)
+        let stats = core.statistics(now: 11.1)
+        #expect(stats.state == .idle && stats.endReason == .network, "HELLO 停了 6 秒：发送端不见了")
+    }
+
+    @Test("从 seq 号包恢复：重新缓冲后播放，不算丢包也不算抖动；暂停前发出、晚到的包忽略")
+    func resumeFromSequence() {
+        let core = makeCore()
+        let factory = PacketFactory()
+        playThenStandby(core, factory)
+        #expect(core.ingest(factory.packet(39), from: pc, at: 0.3) == .ignored, "暂停前最后一个包晚到")
+        #expect(core.statistics(now: 0.3).state == .standby)
+        resume(core, factory, at: 3)
+        let stats = core.statistics(now: 3.1)
+        #expect(stats.state == .playing)
+        #expect(stats.packetsLost == 0, "接着发的包不算丢")
+        #expect(stats.jitterMs < 5, "停了 3 秒不算到达抖动")
+    }
+
+    @Test("待机的发送端照样占着 Mac：别的电脑的包忽略，6 秒没有 HELLO 之后才让它接手")
+    func standbyHoldsReceiver() {
+        let core = makeCore()
+        let factory = PacketFactory()
+        playThenStandby(core, factory)
+        var other = PacketFactory()
+        other.streamID = 0x0102_0304
+        #expect(core.ingest(other.packet(0), from: "10.0.0.9", at: 3) == .ignored)
+        #expect(core.statistics(now: 3).state == .standby)
+        core.housekeeping(now: 6.3) // 上次 HELLO 在 0.21 秒
+        #expect(core.statistics(now: 6.3).state == .idle)
+        #expect(core.ingest(other.packet(1), from: "10.0.0.9", at: 6.4) == .accepted)
+        #expect(core.statistics(now: 6.4).senderAddress == "10.0.0.9")
+    }
+
+    @Test("待机中电脑换了 IP（比如插上网线）：同一个流的包照样恢复")
+    func resumeFromNewAddress() {
+        let core = makeCore()
+        let factory = PacketFactory()
+        playThenStandby(core, factory)
+        for i in 40..<60 {
+            core.ingest(factory.packet(i), from: "10.0.0.7", at: 3 + Double(i - 40) * 0.005)
+            _ = core.renderStereo(240)
+        }
+        let stats = core.statistics(now: 3.1)
+        #expect(stats.state == .playing)
+        #expect(stats.jitterMs < 5)
+    }
+
+    @Test("恢复之后晚到的待机 HELLO 不会再把流停下")
+    func staleStandbyHello() {
+        let core = makeCore()
+        let factory = PacketFactory()
+        playThenStandby(core, factory)
+        resume(core, factory, at: 3)
+        core.enterStandby(stream: factory.streamID, from: pc, resumeSequence: 40, now: 3.2)
+        #expect(core.statistics(now: 3.2).state == .playing)
+    }
+
+    @Test("HELLO 里的 standby 让当前流待机；STATUS 报 standby 并声明支持待机；别的流的 HELLO 不管；BYE 照常停止")
+    func helloStandbyAndStatus() throws {
+        let core = makeCore()
+        let outbox = Outbox()
+        let responder = makeResponder(core, outbox)
+        let factory = PacketFactory()
+        let endpoint = UDPEndpoint(address: pc, port: 50_123)
+        for i in 0..<40 {
+            core.ingest(factory.packet(i), from: pc, at: Double(i) * 0.005)
+            _ = core.renderStereo(240)
+        }
+        send(responder, .hello, HelloMessage(name: "DESKTOP-PC", stream: factory.streamID &+ 1, standby: true, seq: 40),
+             from: endpoint, at: 0.21)
+        #expect(core.statistics(now: 0.21).state == .playing, "别的流")
+
+        send(responder, .hello, HelloMessage(name: "DESKTOP-PC", stream: factory.streamID, standby: true, seq: 40),
+             from: endpoint, at: 0.22)
+        #expect(core.statistics(now: 0.22).state == .standby)
+        let status = try #require(outbox.statuses.last?.message)
+        #expect(status.state == "standby" && status.stream == factory.streamID)
+        #expect(status.features == ["standby"])
+
+        send(responder, .bye, ByeMessage(stream: factory.streamID, reason: "user"), from: endpoint, at: 1)
+        let stats = core.statistics(now: 1)
+        #expect(stats.state == .idle && stats.endReason == .stopped)
+
+        // Windows 发来的 JSON
+        let wire = ControlPacket.decode(HelloMessage.self, from: Data(#"{"stream":7,"standby":true,"seq":42}"#.utf8))
+        #expect(wire == HelloMessage(stream: 7, standby: true, seq: 42))
+    }
+}

@@ -78,7 +78,13 @@ public sealed record HelloMessage(
     [property: JsonPropertyName("name")] string? Name,
     [property: JsonPropertyName("kind")] string? Kind, // laptop / desktop
     [property: JsonPropertyName("app")] string? App,
-    [property: JsonPropertyName("stream")] uint Stream);
+    [property: JsonPropertyName("stream")] uint Stream)
+{
+    /// <summary>待机：电脑没有声音，这一路流暂停发包，只保留握手（Mac 在 STATUS 里声明支持时才会这样）</summary>
+    [JsonPropertyName("standby")] public bool? Standby { get; init; }
+    /// <summary>待机时：暂停前最后一个包之后的序号，恢复后的第一个包就是它。比它小的包是暂停前发出、晚到的</summary>
+    [JsonPropertyName("seq")] public uint? Seq { get; init; }
+}
 
 /// <summary>发送端停止发送。</summary>
 public sealed record ByeMessage(
@@ -107,8 +113,10 @@ public sealed record StatusMessage
     [JsonPropertyName("kind")] public string? Kind { get; init; }
     [JsonPropertyName("app")] public string? App { get; init; }
     [JsonPropertyName("stream")] public uint Stream { get; init; }
-    /// <summary>buffering / playing / idle / busy</summary>
+    /// <summary>buffering / playing / standby / idle / busy</summary>
     [JsonPropertyName("state")] public string? State { get; init; }
+    /// <summary>接收端支持的功能，比如 standby（待机）</summary>
+    [JsonPropertyName("features")] public string[]? Features { get; init; }
     [JsonPropertyName("busyName")] public string? BusyName { get; init; }
     [JsonPropertyName("bufferMs")] public double? BufferMs { get; init; }
     [JsonPropertyName("targetMs")] public double? TargetMs { get; init; }
@@ -125,6 +133,10 @@ public sealed record StatusMessage
     public bool IsBusy => State == "busy";
     public bool IsPlaying => State == "playing";
     public bool IsBuffering => State == "buffering";
+    public bool IsStandby => State == "standby";
+    public bool IsIdle => State == "idle";
+    /// <summary>接收端认得待机：没声音时可以停发音频包（旧版接收端会把停发当成断开）</summary>
+    public bool SupportsStandby => Features?.Contains("standby") == true;
 }
 
 [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]

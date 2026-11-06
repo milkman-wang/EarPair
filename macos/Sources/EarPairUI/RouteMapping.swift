@@ -32,7 +32,7 @@ extension ReceiverController {
         RouteNode(symbol: outputDevice?.symbolName ?? "speaker.slash",
                   name: outputDevice?.name ?? "没有输出设备",
                   isPlaceholder: outputDevice == nil,
-                  badge: muted && linkState == .playing ? "speaker.slash.fill" : nil)
+                  badge: muted && (linkState == .playing || linkState == .standby) ? "speaker.slash.fill" : nil)
     }
 
     /// 窗口：Windows → Mac、Mac → 输出 两段
@@ -44,6 +44,7 @@ extension ReceiverController {
         case .waiting: return [(.waiting, .waiting), (.inactive, nil)]
         case .connecting: return [(.connecting, nil), (.inactive, nil)]
         case .playing: return [(incoming, nil), (outgoing, nil)]
+        case .standby: return [(.quiet, nil), (muted ? .inactive : .quiet, nil)]
         case .stopped: return [(.inactive, .stopped), (.inactive, nil)]
         case .reconnecting: return [(.connecting, .reconnecting), (.inactive, nil)]
         case .disconnected: return [(.broken, .disconnected), (.inactive, nil)]
@@ -60,6 +61,7 @@ extension ReceiverController {
         case .playing:
             if muted { return (.inactive, nil) }
             return (hasSound ? .flowing(Self.intensity(stats.outputLevelDB)) : .quiet, nil)
+        case .standby: return (muted ? .inactive : .quiet, nil)
         case .stopped: return (.inactive, nil) // 面板里只画灰线
         case .reconnecting: return (.connecting, nil)
         case .disconnected: return (.broken, .disconnected)
@@ -87,6 +89,7 @@ extension ReceiverController {
         case .playing:
             return muted ? "\(senderDisplayName) 的声音已静音"
                 : "\(senderDisplayName) 到 \(outputDevice?.name ?? "输出设备")，正在播放"
+        case .standby: return "\(senderDisplayName) 没有声音，待机"
         case .stopped: return "\(senderDisplayName) 已停止发送"
         case .reconnecting: return "正在重新连接 \(senderDisplayName)"
         case .disconnected: return "\(senderDisplayName) 已断开"
@@ -97,7 +100,7 @@ extension ReceiverController {
     public var menuBarSymbol: String {
         switch linkState {
         case .receiveFailed, .outputFailed: return "ear.trianglebadge.exclamationmark"
-        case .playing where !muted: return "ear.fill"
+        case .playing where !muted, .standby where !muted: return "ear.fill"
         default: return "ear"
         }
     }

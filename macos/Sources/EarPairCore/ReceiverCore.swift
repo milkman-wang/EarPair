@@ -6,6 +6,8 @@ public enum PlaybackState: String, Sendable {
     /// 正在攒缓冲
     case buffering
     case playing
+    /// 发送端那边没有声音，暂停发包，只用 HELLO 保持握手；有声音时接着发同一个流
+    case standby
 }
 
 public struct StreamFormat: Equatable, Sendable {
@@ -106,6 +108,8 @@ public final class ReceiverCore: @unchecked Sendable {
         public var reorderWindow = 3
         /// 多久收不到包算断开（秒）
         public var streamTimeout = 1.0
+        /// 待机时多久收不到 HELLO 算断开（秒）：发送端每 2 秒发一次
+        public var standbyTimeout = 6.0
         /// 用静音补上的最长缺口（秒），更长就清空缓冲重新开始
         public var maxConcealDuration = 0.25
         /// 缓冲超过「目标 + 这个值」时直接丢掉多余的部分（秒）
@@ -164,6 +168,10 @@ public final class ReceiverCore: @unchecked Sendable {
 
     /// 最近一路流怎么结束的；开始新流时清掉
     private var lastEndReason: EndReason?
+    /// 待机时最近一次 HELLO 的时间
+    private var standbyHelloAt = 0.0
+    /// 待机时：恢复后第一个包的序号（发送端在 HELLO 里告诉的），比它小的是暂停前发出、晚到的包
+    private var standbyResumeSequence: UInt32?
 
     private let lock = UnfairLock()
 
@@ -318,12 +326,35 @@ public final class ReceiverCore: @unchecked Sendable {
         return result
     }
 
-    /// 定期调用：发送端超时就进入 idle。
+    /// 定期调用：发送端超时就进入 idle。待机时看 HELLO，平时看音频包。
     public func housekeeping(now: Double) {
         lock.withLock {
-            guard let s = stream, state != .idle, now - s.lastArrival > config.streamTimeout else { return }
+            guard let s = stream, state != .idle else { return }
+            let silence = state == .standby ? now - standbyHelloAt : now - s.lastArrival
+            guard silence > (state == .standby ? config.standbyTimeout : config.streamTimeout) else { return }
             endStreamLocked()
             lastEndReason = .network
+        }
+    }
+
+    /// 发送端说它那边没有声音、暂停发包了（HELLO 里 standby，每 2 秒一次）：当前流进入待机。
+    /// 待机时不按 1 秒没包算断开、不算卡顿，HELLO 停了才算断开；它暂停前最后几个包是静音，缓冲直接清掉。
+    /// 恢复不看 HELLO（可能乱序），看音频包：序号到了 `resumeSequence` 的包来了就恢复。
+    public func enterStandby(stream id: UInt32, from sender: String, resumeSequence: UInt32?, now: Double) {
+        lock.withLock {
+            guard let s = stream, s.id == id, s.senderAddress == sender, state != .idle else { return }
+            if state == .standby {
+                standbyHelloAt = now
+                return
+            }
+            // 已经收到恢复后的包了：这是晚到的旧 HELLO
+            if let resume = resumeSequence, Int32(bitPattern: s.nextSequence &- resume) > 0 { return }
+            state = .standby
+            standbyHelloAt = now
+            standbyResumeSequence = resumeSequence ?? s.nextSequence
+            ring?.clear()
+            pending.removeAll()
+            levelEpoch += 1
         }
     }
 
@@ -340,6 +371,7 @@ public final class ReceiverCore: @unchecked Sendable {
 
     private func endStreamLocked() {
         state = .idle
+        standbyResumeSequence = nil
         ring?.clear()
         pending.removeAll()
         levelEpoch += 1
@@ -352,10 +384,26 @@ public final class ReceiverCore: @unchecked Sendable {
             counters.packetsIgnored += 1
             return .ignored
         }
+        if let s = stream, s.id == header.streamID, state == .standby {
+            if let resume = standbyResumeSequence, Int32(bitPattern: header.sequence &- resume) < 0 {
+                // 暂停前发出、晚到的包（静音），不当成恢复
+                counters.packetsIgnored += 1
+                return .ignored
+            }
+            // 发送端又有声音了：从这个包开始重新攒缓冲（不算卡顿），到达抖动重新估计
+            state = .buffering
+            standbyResumeSequence = nil
+            s.nextSequence = header.sequence
+            s.nextSampleTime = header.sampleTime
+            s.lastTransit = nil
+            pending.removeAll()
+            fadeInNextPacket = true
+        }
         if let s = stream, s.id == header.streamID, state != .idle {
             // 当前流的包，往下走
         } else if let s = stream, state != .idle, s.senderAddress != sender,
-                  now - s.lastArrival < config.streamTimeout {
+                  state == .standby || now - s.lastArrival < config.streamTimeout {
+            // 当前发送端还在（待机的发送端也算：它靠 HELLO 保持，HELLO 停了 housekeeping 会结束它）
             counters.packetsIgnored += 1
             return .ignored
         } else {
@@ -400,6 +448,7 @@ public final class ReceiverCore: @unchecked Sendable {
     private func beginStream(_ header: PacketHeader, sender: String, now: Double) {
         endedStream = nil
         lastEndReason = nil
+        standbyResumeSequence = nil
         let format = StreamFormat(sampleRate: Int(header.sampleRate), channels: Int(header.channels))
         stream = Stream(id: header.streamID, format: format, senderAddress: sender,
                         nextSequence: header.sequence, nextSampleTime: header.sampleTime, lastArrival: now)

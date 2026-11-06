@@ -84,6 +84,7 @@ func describe(_ s: ReceiverStats, kbps: Double) -> String {
         }
     case .buffering: state = "缓冲"
     case .playing: state = "播放"
+    case .standby: state = "待机"
     }
     return "[\(state)] 收 \(s.packetsReceived) 丢 \(s.packetsLost)(\(format(s.lossPercent, 2))%) "
         + "迟到 \(s.packetsLate) 忽略 \(s.packetsIgnored) 欠载 \(s.underruns) 裁剪 \(s.latencyTrims) | "

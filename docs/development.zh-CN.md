@@ -21,7 +21,7 @@
 
 - **音频**：不压缩的 16 位立体声 PCM，每包 240 帧（48 kHz 下 5 ms），约 1.6 Mbit/s。格式和测试向量见 [protocol/audio-packet.md](../protocol/audio-packet.md)。
 - **接收端**：把乱序的包排好，丢包的地方补上静音，前后各做一次很短的淡出淡入（不会爆音），保持 60 ms 缓冲，通过变速重采样补偿两块声卡的时钟差，Wi‑Fi 卡顿后把延迟拉回来。用 AVAudioEngine 播放，由 macOS 把它和 Mac 自己的声音混在一起。
-- **控制通道**（同一个端口）：HELLO（电脑名和设备类型）、每秒一次的 STATUS（正在播放、正忙、静音、输出设备）、停止时的 BYE（带上原因：手动停止、网络、音频设备）。网络断开后，电脑会一直探测 Mac，Mac 也会在一分钟内不断联系电脑，网络一恢复就自动接上。见 [protocol/control-packet.md](../protocol/control-packet.md)。
+- **控制通道**（同一个端口）：HELLO（电脑名和设备类型；电脑没有声音、暂停发音频包时带上待机标记）、每秒一次的 STATUS（正在播放、正忙、静音、输出设备）、停止时的 BYE（带上原因：手动停止、网络、音频设备）。网络断开后，电脑会一直探测 Mac，Mac 也会在一分钟内不断联系电脑，网络一恢复就自动接上。见 [protocol/control-packet.md](../protocol/control-packet.md)。
 - **自动发现**：Mac 用 Bonjour 广播 `_earpair._udp`，Windows 用系统自带的 DNS-SD 找到它。
 
 ## 目录结构
@@ -102,7 +102,7 @@ python3 tools/test_sender.py 127.0.0.1 --clock-ppm 200 --jitter-ms 8 --loss 1 --
   windows\EarPair.App\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\EarPair.exe --demo playing --theme dark
   ```
 
-  状态有 `pick` `off` `connecting` `playing` `muted` `legacy` `noresponse` `waiting` `busy` `nosource` `failed` `postmute`。
+  状态有 `pick` `off` `connecting` `playing` `standby` `muted` `legacy` `noresponse` `waiting` `busy` `nosource` `failed` `postmute`。
 
 图标由 `tools/make-icons.swift` 生成（Windows 的 `.ico` 和托盘图标、Mac 的 `.icns`）。
 

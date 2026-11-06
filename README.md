@@ -24,6 +24,7 @@ Your AirPods stay connected to your Mac. EarPair sends your Windows PC's sound o
 - **Even loudness.** Auto-leveling keeps quiet and loud PC audio at a steady volume.
 - **A quiet PC.** Mutes the PC's own speakers while sending and turns them back on when you stop.
 - **Rides out Wi‑Fi hiccups.** Lost or late packets and clock drift between the two machines don't cause clicks or a growing delay.
+- **Idle when the PC is quiet.** After a few seconds of silence the PC stops streaming and only keeps a light handshake with the Mac, saving battery and Wi‑Fi. Sound picks up again the moment something plays.
 - **Tells a stop from a dropout.** The Mac shows a notification when a PC connects or stops sending. If the network drops instead, the notification says so and EarPair reconnects by itself.
 - **Stays out of the way.** It lives in the Mac's menu bar and in the Windows notification area, and can start with Windows.
 - **Nothing to install on Windows.** Unzip and run; the .NET runtime is included.
