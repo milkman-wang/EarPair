@@ -8,7 +8,7 @@ namespace EarPair.Sender;
 /// </summary>
 public sealed class AudioCapture : IDisposable
 {
-    private readonly WasapiLoopbackCapture _capture;
+    private readonly WasapiCapture _capture;
     private readonly WasapiOut? _keepAlive;
     private readonly PcmConverter _converter;
     private readonly object _gate = new();
@@ -27,7 +27,7 @@ public sealed class AudioCapture : IDisposable
 
     public AudioCapture(MMDevice device, bool keepAlive)
     {
-        _capture = new WasapiLoopbackCapture(device);
+        _capture = CreateLoopbackCapture(device);
         WaveFormat format = _capture.WaveFormat;
         _converter = new PcmConverter(format);
         SampleRate = format.SampleRate;
@@ -46,6 +46,17 @@ public sealed class AudioCapture : IDisposable
             _keepAlive.Init(new SilenceProvider(format));
         }
     }
+
+    /// <summary>
+    /// NAudio 自带的 WasapiLoopbackCapture 是轮询：每 50 ms 读一次（Windows 默认计时精度下实际约 62 ms），
+    /// 一次拿到 60 ms 左右的数据，发出去就是一批十几个包，Mac 端 60 ms 的缓冲几乎没有余量。
+    /// 改成事件触发后，音频引擎每 10 ms 通知一次，每次 2 个包，节奏均匀。
+    /// Windows 10 1703 以前不支持事件触发的 loopback，退回轮询。
+    /// </summary>
+    private static WasapiCapture CreateLoopbackCapture(MMDevice device) =>
+        OperatingSystem.IsWindowsVersionAtLeast(10, 0, 15063)
+            ? new EventDrivenLoopbackCapture(device)
+            : new WasapiLoopbackCapture(device);
 
     public void Start()
     {
@@ -81,5 +92,15 @@ public sealed class AudioCapture : IDisposable
     {
         _capture.Dispose();
         _keepAlive?.Dispose();
+    }
+
+    /// <summary>事件触发的 loopback 采集。缓冲仍是 100 ms：采集线程偶尔被系统卡住几十毫秒也不会丢数据。</summary>
+    private sealed class EventDrivenLoopbackCapture : WasapiCapture
+    {
+        // 参数：设备、事件触发、缓冲时长（毫秒）
+        public EventDrivenLoopbackCapture(MMDevice device) : base(device, true, 100) { }
+
+        protected override AudioClientStreamFlags GetAudioClientStreamFlags() =>
+            AudioClientStreamFlags.Loopback | base.GetAudioClientStreamFlags();
     }
 }
