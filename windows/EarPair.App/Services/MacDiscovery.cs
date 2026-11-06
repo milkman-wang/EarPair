@@ -77,6 +77,7 @@ public sealed class MacDiscovery : IDisposable
 
     private void Update(string id, IReadOnlyDictionary<string, object> properties)
     {
+        // Bonjour 会把同一台 Mac 的信息分几次送来，大多数时候什么都没变：没变就不通知
         lock (_lock)
         {
             _macs.TryGetValue(id, out DiscoveredMac? old);
@@ -92,7 +93,9 @@ public sealed class MacDiscovery : IDisposable
                 text?.Select(entry => entry.Split('=', 2)).FirstOrDefault(kv => kv.Length == 2 && kv[0] == key)?[1];
             string? macId = Txt("id") ?? old?.MacId;
             string? kind = Txt("kind") is "laptop" or "desktop" ? Txt("kind") : old?.Kind;
-            _macs[id] = new DiscoveredMac(id, name, address, port, macId, kind);
+            var mac = new DiscoveredMac(id, name, address, port, macId, kind);
+            if (mac == old) return;
+            _macs[id] = mac;
         }
         Changed?.Invoke();
     }

@@ -125,6 +125,10 @@ public sealed class SenderEngine : IDisposable
     private double _silentSince = double.NaN;
     private bool _postMuteFallback;
     private double _freshUntil = double.NegativeInfinity;
+    private double _mutedAt;
+    private double _othersCheckedAt = double.NegativeInfinity;
+    /// <summary>静音之后还采到过声音：这台设备静音不影响采集，不用再查</summary>
+    private bool _muteVerified;
 
     // 采集线程写、任意线程读
     private float _peakLeft;
@@ -161,7 +165,8 @@ public sealed class SenderEngine : IDisposable
             _notifications = new DeviceNotifications(this);
             _enumerator.RegisterEndpointNotificationCallback(_notifications);
         });
-        _ticker = new Timer(_ => Post(OnTick), null, TickInterval, TickInterval);
+        // 只在开关打开时走（Start 里打开、StopNow 里关掉）
+        _ticker = new Timer(_ => Post(OnTick), null, Timeout.Infinite, Timeout.Infinite);
     }
 
     /// <summary>当前状态；计数器部分实时读取。</summary>
@@ -185,6 +190,7 @@ public sealed class SenderEngine : IDisposable
     /// </summary>
     public void Start(SenderSettings settings) => Post(() =>
     {
+        SetTicking(true);
         bool targetChanged = _settings is null || _settings.Host != settings.Host || _settings.Port != settings.Port;
         if (targetChanged)
         {
@@ -247,8 +253,22 @@ public sealed class SenderEngine : IDisposable
 
     private double Now => _clock.Elapsed.TotalSeconds;
 
+    private void SetTicking(bool on)
+    {
+        try
+        {
+            TimeSpan period = on ? TickInterval : Timeout.InfiniteTimeSpan;
+            _ticker.Change(period, period);
+        }
+        catch (ObjectDisposedException)
+        {
+            // 正在退出
+        }
+    }
+
     private void StopNow()
     {
+        SetTicking(false);
         TearDown();
         SendBye();
         _settings = null;
@@ -502,8 +522,10 @@ public sealed class SenderEngine : IDisposable
     {
         _postMuteFallback = false;
         _silentSince = double.NaN;
+        _muteVerified = false;
         if (!settings.MuteLocal || settings.PostMuteDevices.Contains(device.ID)) return;
         _mute = new LocalMute(device);
+        _mutedAt = Now;
         if (_mute.Mute()) MutedDeviceChanged?.Invoke(device.ID);
     }
 
@@ -514,9 +536,18 @@ public sealed class SenderEngine : IDisposable
     private void CheckPostMuteCapture(double now)
     {
         float ours = Interlocked.Exchange(ref _peakForMuteCheck, 0);
-        if (_mute is not { MutedByUs: true } mute) return;
-        bool othersPlaying = mute.OthersPeak() > 0.01f;
-        if (!othersPlaying || ours > 1e-5f)
+        if (_mute is not { MutedByUs: true } mute || _muteVerified) return;
+        if (ours > 1e-5f)
+        {
+            // 静音之后还采得到声音：这台设备没问题，之后不用再查
+            if (now - _mutedAt > 1) _muteVerified = true;
+            _silentSince = double.NaN;
+            return;
+        }
+        // 枚举所有音频会话要走 COM，每秒查一次就够了（判定要连续 2 秒）
+        if (now - _othersCheckedAt < 1) return;
+        _othersCheckedAt = now;
+        if (mute.OthersPeak() <= 0.01f)
         {
             _silentSince = double.NaN;
             return;
@@ -613,7 +644,15 @@ public sealed class SenderEngine : IDisposable
         a.State == b.State && a.Error == b.Error && a.DeviceName == b.DeviceName && a.Health == b.Health &&
         a.PortUnreachable == b.PortUnreachable && a.LocalMuted == b.LocalMuted &&
         a.PostMuteFallback == b.PostMuteFallback && a.Fresh == b.Fresh && a.Settings == b.Settings &&
-        Equals(a.Remote, b.Remote);
+        SameRemote(a.Remote, b.Remote);
+
+    /// <summary>
+    /// 只比界面用到的字段。STATUS 里的计数和缓冲水位每次都不一样，整个比的话 Mac 每回一次 STATUS
+    /// 托盘和窗口就要刷新一次（快照本身照样每次更新）
+    /// </summary>
+    private static bool SameRemote(StatusMessage? x, StatusMessage? y) =>
+        ReferenceEquals(x, y) || x is not null && y is not null && x.State == y.State && x.BusyName == y.BusyName &&
+        x.Name == y.Name && x.Kind == y.Kind && x.Output == y.Output && x.Transport == y.Transport && x.Muted == y.Muted;
 
     private void UpdatePeak(short[] samples, int frames)
     {

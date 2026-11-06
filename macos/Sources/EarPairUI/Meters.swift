@@ -14,8 +14,13 @@ struct LevelWaveform: View {
     private let bar: CGFloat = 2
     private let gap: CGFloat = 2
 
+    /// 最近一分钟都没有声音（比如 Windows 只在发静音保活）：柱子全是一样的小点，不用 30 fps 滚动
+    private var isSilent: Bool {
+        points.allSatisfy { Self.height($0.muted ? $0.inputLevelDB : $0.outputLevelDB) == 0 }
+    }
+
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isLive || reduceMotion)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isLive || reduceMotion || isSilent)) { timeline in
             Canvas { context, size in
                 let step = bar + gap
                 let last = points.last?.time ?? timeline.date
@@ -109,7 +114,7 @@ struct MetricColumn: View {
                     .monospacedDigit()
                     .foregroundStyle(valueStyle)
                     .contentTransition(.numericText(value: value))
-                    .animation(.snappy, value: value)
+                    .animation(.snappy, value: text) // 显示的数字变了才动，原始值的小抖动不触发
                 Text(verbatim: unit).font(.callout.weight(.medium)).foregroundStyle(.secondary)
             }
             spark

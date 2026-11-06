@@ -213,10 +213,14 @@ public sealed partial class MainWindow : Window
 
     // MARK: - 电平
 
+    /// <summary>窗口看得见：显示着并且没有最小化（最小化时 IsVisible 仍然是 true）</summary>
+    private bool IsShown =>
+        AppWindow.IsVisible && AppWindow.Presenter is not OverlappedPresenter { State: OverlappedPresenterState.Minimized };
+
     private void UpdateMeterTimer()
     {
         if (_closed) return;
-        if (Route.HasFlowing && AppWindow.IsVisible)
+        if (Route.HasFlowing && IsShown)
         {
             _meter.Start();
             return;
@@ -229,7 +233,11 @@ public sealed partial class MainWindow : Window
     /// <summary>每 33 ms：取峰值，峰值保持 1 秒、每秒回落 24 dB（和 Mac 一致）；光点亮度 = (dB + 50) / 40</summary>
     private void UpdateMeter()
     {
-        if (!AppWindow.IsVisible) return;
+        if (!IsShown)
+        {
+            UpdateMeterTimer(); // 最小化了：停掉定时器，光点熄灭（动画也跟着停）
+            return;
+        }
         float peak = _app.TakePeak();
         double db = peak > 0 ? 20 * Math.Log10(peak) : -120;
         const double dt = 0.033;
@@ -345,9 +353,11 @@ public sealed partial class MainWindow : Window
 
     private void OnAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
     {
-        if (args.DidVisibilityChange) UpdateMeterTimer();
+        // 最小化、还原会改窗口位置和大小，不一定有 DidVisibilityChange
+        if (args.DidVisibilityChange || args.DidSizeChange || args.DidPositionChange || args.DidPresenterChange)
+            UpdateMeterTimer();
         if (args.DidSizeChange || args.DidPresenterChange) UpdateTitleBarRegions();
-        if (!args.DidSizeChange || !sender.IsVisible) return;
+        if (!args.DidSizeChange || !IsShown) return; // 最小化时的尺寸不记
         double scale = WindowHelper.Scale(this);
         _app.Settings.WindowWidth = Math.Round(sender.Size.Width / scale);
         _app.Settings.WindowHeight = Math.Round(sender.Size.Height / scale);

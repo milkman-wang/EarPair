@@ -12,6 +12,7 @@ public sealed class UdpSender : IDisposable
     private readonly UdpClient _client;
     private readonly Thread? _receiveThread;
     private volatile bool _disposed;
+    private long _lastUnreachable = long.MinValue / 2;
 
     public long PacketsSent { get; private set; }
     public long BytesSent { get; private set; }
@@ -31,7 +32,7 @@ public sealed class UdpSender : IDisposable
         _client.Connect(host, port);
         if (receive)
         {
-            _client.Client.ReceiveTimeout = 500;
+            // 不设接收超时：Dispose 关掉套接字时，阻塞中的 Receive 会抛异常，线程就退出了
             _receiveThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "EarPair 回包" };
             _receiveThread.Start();
         }
@@ -81,11 +82,13 @@ public sealed class UdpSender : IDisposable
             }
             catch (SocketException ex) when (ex.SocketErrorCode is SocketError.ConnectionReset or SocketError.ConnectionRefused)
             {
-                PortUnreachable?.Invoke();
-            }
-            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut)
-            {
-                // 定期醒来检查是否该退出
+                // 每个音频包都可能换回一个“端口不可达”：每秒报一次就够了（引擎按 5 秒窗口判断）
+                long now = Environment.TickCount64;
+                if (now - _lastUnreachable >= 1000)
+                {
+                    _lastUnreachable = now;
+                    PortUnreachable?.Invoke();
+                }
             }
             catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
             {

@@ -21,6 +21,8 @@ public readonly record struct LinkPalette(Color Accent, Color Secondary, Color T
 public sealed partial class SignalLink : Grid
 {
     private const float Thickness = 3;
+    /// <summary>光点的间距和速度（DIP、DIP/s）</summary>
+    private const float PulsePeriod = 26, PulseSpeed = 40;
     /// <summary>⚠ / ✕ 在线中间留出的缺口</summary>
     private const float MarkGap = 28;
 
@@ -35,6 +37,8 @@ public sealed partial class SignalLink : Grid
     private ContainerVisual? _root;
     private ShapeVisual? _line;
     private ShapeVisual? _pulses;
+    /// <summary>光点的平移动画在跑：只在有声音时跑，没声音（看不见）或最小化时停掉</summary>
+    private bool _sliding;
     private LinkLook _look = LinkLook.Inactive;
     private LinkPalette? _palette;
     private bool _animate = true;
@@ -54,7 +58,9 @@ public sealed partial class SignalLink : Grid
         get => _intensity;
         set
         {
-            _intensity = Math.Clamp(value, 0, 1);
+            float intensity = Math.Clamp(value, 0, 1);
+            if (intensity == _intensity) return;
+            _intensity = intensity;
             ApplyIntensity();
         }
     }
@@ -71,7 +77,14 @@ public sealed partial class SignalLink : Grid
     private void ApplyIntensity()
     {
         if (_look != LinkLook.Flowing) return;
-        if (_pulses is not null) _pulses.Opacity = _intensity;
+        if (_pulses is not null)
+        {
+            _pulses.Opacity = _intensity;
+            bool sound = _intensity > 0;
+            if (sound && !_sliding) Slide(_pulses.Compositor, _pulses, PulsePeriod, PulsePeriod / PulseSpeed);
+            else if (!sound && _sliding) _pulses.StopAnimation("Offset.X");
+            _sliding = sound;
+        }
         // 关掉了动画效果：没有光点，实线本身随电平变亮
         else if (_line is not null) _line.Opacity = 0.35f + 0.65f * _intensity;
     }
@@ -83,6 +96,7 @@ public sealed partial class SignalLink : Grid
         _root = null;
         _line = null;
         _pulses = null;
+        _sliding = false;
     }
 
     private void Rebuild()
@@ -168,13 +182,13 @@ public sealed partial class SignalLink : Grid
         return visual;
     }
 
-    /// <summary>10×3 的光点，间距 26，以 40 DIP/s 向右走；整体的不透明度就是亮度</summary>
+    /// <summary>10×3 的光点，间距 26，以 40 DIP/s 向右走；整体的不透明度就是亮度。动画在 ApplyIntensity 里按有没有声音启停</summary>
     private static ShapeVisual Pulses(Compositor c, float width, float y, Color color)
     {
-        const float period = 26, length = 10;
-        ShapeVisual visual = Shapes(c, width + period);
-        for (float x = 0; x < width + period; x += period) visual.Shapes.Add(Pill(c, x, y, length, color));
-        Slide(c, visual, period, period / 40f);
+        const float length = 10;
+        ShapeVisual visual = Shapes(c, width + PulsePeriod);
+        for (float x = 0; x < width + PulsePeriod; x += PulsePeriod) visual.Shapes.Add(Pill(c, x, y, length, color));
+        visual.Offset = new Vector3(-PulsePeriod, 0, 0);
         visual.Opacity = 0;
         return visual;
     }
