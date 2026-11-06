@@ -69,11 +69,12 @@
     <comment>两台 Mac 重名时：{0}：名字，{1}：IP</comment>
   </data>
   <data name="SystemDefault" xml:space="preserve">
-    <value>System default</value>
+    <value>All apps</value>
+    <comment>声音来源的第一项：采集除 EarPair 外所有程序的声音（进程 loopback）</comment>
   </data>
   <data name="SystemDefaultDevice" xml:space="preserve">
-    <value>System default ({0})</value>
-    <comment>{0}：当前的默认输出设备</comment>
+    <value>All apps (default output: {0})</value>
+    <comment>{0}：当前的默认输出设备（发送时静音的就是它）</comment>
   </data>
 
   <!-- 输入地址对话框 -->

@@ -47,6 +47,14 @@
     <value>Capture started: {0} ({1}), stream {2}</value>
     <comment>{0}：设备名，{1}：采集格式，{2}：流 id</comment>
   </data>
+  <data name="LogCaptureAllApps" xml:space="preserve">
+    <value>Capture started: every app except EarPair (process loopback, {0}), stream {1}</value>
+    <comment>{0}：采集格式，{1}：流 id</comment>
+  </data>
+  <data name="LogProcessLoopbackUnavailable" xml:space="preserve">
+    <value>Process loopback isn't available ({0}); capturing the output device instead</value>
+    <comment>{0}：原因</comment>
+  </data>
   <data name="LogMacResponded" xml:space="preserve">
     <value>Mac responded: {0} ({1})</value>
     <comment>{0}：Mac 的名字，{1}：Mac 上 EarPair 的版本</comment>
@@ -71,6 +79,10 @@
   </data>
   <data name="LogMuteSkipped" xml:space="preserve">
     <value>Not muting {0}: earlier it captured no sound while muted</value>
+    <comment>{0}：设备名</comment>
+  </data>
+  <data name="LogMuteRememberedButProcessLoopback" xml:space="preserve">
+    <value>{0} once captured no sound while muted, but process loopback isn't affected by muting; muting it</value>
     <comment>{0}：设备名</comment>
   </data>
   <data name="LogMuted" xml:space="preserve">

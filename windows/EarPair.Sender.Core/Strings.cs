@@ -24,6 +24,9 @@ public static class CoreStrings
 
     public static string LogCaptureStarted(string device, string format, uint stream) =>
         Format(nameof(LogCaptureStarted), device, format, stream.ToString("x8", CultureInfo.InvariantCulture));
+    public static string LogCaptureAllApps(string format, uint stream) =>
+        Format(nameof(LogCaptureAllApps), format, stream.ToString("x8", CultureInfo.InvariantCulture));
+    public static string LogProcessLoopbackUnavailable(string reason) => Format(nameof(LogProcessLoopbackUnavailable), reason);
     public static string LogMacResponded(string? name, string? app) => Format(nameof(LogMacResponded), name, app);
     public static string LogStandby => Get(nameof(LogStandby));
     public static string LogResumed => Get(nameof(LogResumed));
@@ -33,6 +36,8 @@ public static class CoreStrings
     // 发送时本机静音
     public static string LogMuteOff => Get(nameof(LogMuteOff));
     public static string LogMuteSkipped(string device) => Format(nameof(LogMuteSkipped), device);
+    public static string LogMuteRememberedButProcessLoopback(string device) =>
+        Format(nameof(LogMuteRememberedButProcessLoopback), device);
     public static string LogMuted(string device) => Format(nameof(LogMuted), device);
     public static string LogAlreadyMuted(string device) => Format(nameof(LogAlreadyMuted), device);
     public static string LogMuteFailed(string device) => Format(nameof(LogMuteFailed), device);

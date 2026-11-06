@@ -40,6 +40,12 @@
   <data name="LogCaptureStarted" xml:space="preserve">
     <value>开始采集：{0}（{1}），流 {2}</value>
   </data>
+  <data name="LogCaptureAllApps" xml:space="preserve">
+    <value>开始采集：除 EarPair 外所有程序的声音（进程 loopback，{0}），流 {1}</value>
+  </data>
+  <data name="LogProcessLoopbackUnavailable" xml:space="preserve">
+    <value>用不了进程 loopback（{0}），改为采集输出设备</value>
+  </data>
   <data name="LogMacResponded" xml:space="preserve">
     <value>Mac 回传：{0}（{1}）</value>
   </data>
@@ -63,6 +69,9 @@
   </data>
   <data name="LogMuteSkipped" xml:space="preserve">
     <value>不静音 {0}：之前发现它静音后采集不到声音</value>
+  </data>
+  <data name="LogMuteRememberedButProcessLoopback" xml:space="preserve">
+    <value>{0} 之前被记成静音后采集不到声音，但进程 loopback 不受静音影响，照样静音</value>
   </data>
   <data name="LogMuted" xml:space="preserve">
     <value>已静音本机：{0}</value>

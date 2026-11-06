@@ -139,8 +139,10 @@ public sealed partial class MainWindow : Window
 
             TargetButton.Content = target is null ? Strings.ChooseMac : App.MacTitle(target, _app.AvailableMacs());
             MuteSwitch.IsOn = _app.Settings.MuteLocal;
-            string? device = _app.Engine.Snapshot.DeviceId ?? _app.Settings.DeviceId;
-            bool cannotMute = device is not null && _app.Settings.PostMuteDevices.Contains(device);
+            SenderSnapshot snapshot = _app.Engine.Snapshot;
+            string? device = snapshot.DeviceId ?? _app.Settings.DeviceId;
+            // “静音后采不到”的名单是设备 loopback 时记下的；进程 loopback 不受静音影响，照样可以静音
+            bool cannotMute = device is not null && !snapshot.ProcessLoopback && _app.Settings.PostMuteDevices.Contains(device);
             MuteSwitch.IsEnabled = !cannotMute;
             ToolTipService.SetToolTip(MuteSwitch, cannotMute ? Strings.CannotMuteDevice : null);
             StartupSwitch.IsOn = Autostart.IsEnabled;

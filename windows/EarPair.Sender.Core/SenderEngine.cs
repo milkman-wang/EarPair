@@ -82,12 +82,15 @@ public sealed record SenderSnapshot(
     public bool Fresh { get; init; }
     /// <summary>待机：电脑没有声音，暂停发音频包，只和 Mac 保持握手（Sending 的一种情况）</summary>
     public bool Standby { get; init; }
+    /// <summary>正在用进程 loopback 采集（不受输出设备静音影响，“静音后采不到”的名单不适用）</summary>
+    public bool ProcessLoopback { get; init; }
 }
 
 public sealed record AudioDeviceInfo(string Id, string Name, bool IsDefault);
 
 /// <summary>
-/// 发送引擎：采集一个输出设备的声音，打包后用 UDP 发给 Mac，并和 Mac 交换控制包（名字、接收状态）。
+/// 发送引擎：采集声音（跟随系统默认设备时采集除 EarPair 外所有程序的声音，指定了设备时只采那个设备），
+/// 打包后用 UDP 发给 Mac，并和 Mac 交换控制包（名字、接收状态）。
 /// 所有 WASAPI 对象都在引擎自己的一个 MTA 线程上创建和使用（WinUI 的界面线程是 STA，直接用会出 COM 套间问题），
 /// 公开方法可以在任何线程调用。状态变化时触发 Changed（在引擎线程上），界面自己切回界面线程。
 /// </summary>
@@ -110,7 +113,11 @@ public sealed class SenderEngine : IDisposable
 
     // ---- 以下字段只在引擎线程上读写 ----
     private SenderSettings? _settings;
-    private AudioCapture? _capture;
+    private ICapture? _capture;
+    /// <summary>当前这路采集是进程 loopback（跟随系统默认设备时用），否则是设备 loopback</summary>
+    private bool _usingProcessLoopback;
+    /// <summary>进程 loopback 激活失败过（系统太老等）：之后都用设备 loopback，不再每次重试</summary>
+    private bool _processLoopbackUnavailable;
     private UdpSender? _udp;
     private (string Host, int Port)? _udpTarget;
     private PacketEncoder? _encoder;
@@ -376,10 +383,10 @@ public sealed class SenderEngine : IDisposable
 
         try
         {
-            _capture = new AudioCapture(device, settings.KeepAlive);
+            _capture = CreateCapture(device, settings);
             _streamId = (uint)Random.Shared.NextInt64(1, uint.MaxValue);
             _encoder = new PacketEncoder(_capture.SampleRate, settings.FramesPerPacket, _streamId);
-            AudioCapture capture = _capture;
+            ICapture capture = _capture;
             PacketEncoder encoder = _encoder;
             UdpSender udp = _udp!;
             lock (_sendGate) _standby = false;
@@ -407,7 +414,9 @@ public sealed class SenderEngine : IDisposable
             capture.Stopped += ex => Post(() => OnCaptureStopped(capture, ex));
             _deviceId = device.ID;
             _deviceName = device.FriendlyName;
-            Log?.Invoke(CoreStrings.LogCaptureStarted(device.FriendlyName, capture.FormatDescription, _streamId));
+            Log?.Invoke(_usingProcessLoopback
+                ? CoreStrings.LogCaptureAllApps(capture.FormatDescription, _streamId)
+                : CoreStrings.LogCaptureStarted(device.FriendlyName, capture.FormatDescription, _streamId));
             capture.Start();
             _retryCount = 0;
             _sendingSince = Now;
@@ -444,6 +453,30 @@ public sealed class SenderEngine : IDisposable
         _udpTarget = (settings.Host, settings.Port);
     }
 
+    /// <summary>
+    /// 跟随系统默认设备时用进程 loopback（采集除 EarPair 外所有程序的声音，不受输出设备静音和音量影响）；
+    /// 用户指定了某个设备时只采那个设备（设备 loopback），和以前一样。进程 loopback 用不了就退回设备 loopback。
+    /// </summary>
+    private ICapture CreateCapture(MMDevice device, SenderSettings settings)
+    {
+        _usingProcessLoopback = false;
+        if (settings.DeviceId is null && !_processLoopbackUnavailable)
+        {
+            try
+            {
+                var capture = new ProcessLoopbackCapture(settings.KeepAlive ? device : null);
+                _usingProcessLoopback = true;
+                return capture;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                _processLoopbackUnavailable = true;
+                Log?.Invoke(CoreStrings.LogProcessLoopbackUnavailable(Describe(ex)));
+            }
+        }
+        return new AudioCapture(device, settings.KeepAlive);
+    }
+
     private MMDevice? FindDevice(string? id)
     {
         try
@@ -459,7 +492,7 @@ public sealed class SenderEngine : IDisposable
     }
 
     /// <summary>采集意外停止（设备被拔掉、被停用、格式被改）：换到新的默认设备，或者等设备回来。</summary>
-    private void OnCaptureStopped(AudioCapture capture, Exception? ex)
+    private void OnCaptureStopped(ICapture capture, Exception? ex)
     {
         if (capture != _capture || _settings is null) return; // 是我们自己停的
         TearDown();
@@ -654,8 +687,13 @@ public sealed class SenderEngine : IDisposable
         }
         if (settings.PostMuteDevices.Contains(device.ID))
         {
-            Log?.Invoke(CoreStrings.LogMuteSkipped(name));
-            return;
+            // 这份名单是设备 loopback 时记下的（静音后设备 loopback 只剩静音）；进程 loopback 不受静音影响，照样静音
+            if (!_usingProcessLoopback)
+            {
+                Log?.Invoke(CoreStrings.LogMuteSkipped(name));
+                return;
+            }
+            Log?.Invoke(CoreStrings.LogMuteRememberedButProcessLoopback(name));
         }
         _mute = new LocalMute(device);
         _mute.UserUnmuted += () => Post(() => Log?.Invoke(CoreStrings.LogUserUnmuted(name)));
@@ -720,7 +758,7 @@ public sealed class SenderEngine : IDisposable
     {
         _retryAt = double.PositiveInfinity;
         lock (_sendGate) _standby = false;
-        AudioCapture? capture = _capture;
+        ICapture? capture = _capture;
         _capture = null;
         if (capture is not null)
         {
@@ -773,7 +811,7 @@ public sealed class SenderEngine : IDisposable
     private void Publish()
     {
         double now = Now;
-        AudioCapture? capture = _capture;
+        ICapture? capture = _capture;
         RemoteHealth health = RemoteHealth.Unknown;
         if (_remote is { IsBusy: true } && now - _remoteAt < 6) health = RemoteHealth.Busy;
         else if (_replies && _state == SenderState.Sending)
@@ -797,6 +835,7 @@ public sealed class SenderEngine : IDisposable
             PostMuteFallback = _postMuteFallback,
             Fresh = now < _freshUntil,
             Standby = _standby && _state == SenderState.Sending,
+            ProcessLoopback = capture is not null && _usingProcessLoopback,
         };
         SenderSnapshot previous = _snapshot;
         _snapshot = next;
@@ -808,7 +847,7 @@ public sealed class SenderEngine : IDisposable
         a.State == b.State && a.Error == b.Error && a.DeviceName == b.DeviceName && a.Health == b.Health &&
         a.PortUnreachable == b.PortUnreachable && a.LocalMuted == b.LocalMuted &&
         a.PostMuteFallback == b.PostMuteFallback && a.Fresh == b.Fresh && a.Standby == b.Standby &&
-        a.Settings == b.Settings &&
+        a.ProcessLoopback == b.ProcessLoopback && a.Settings == b.Settings &&
         SameRemote(a.Remote, b.Remote);
 
     /// <summary>
