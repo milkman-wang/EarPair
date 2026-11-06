@@ -70,6 +70,20 @@ public enum LinkState: Equatable, Sendable {
     case outputFailed(String)
 }
 
+/// 菜单栏图标单独发布，只在图标真的变了的时候才通知。
+/// 控制器播放时每 0.1 秒更新一次统计；菜单栏图标要是跟着整个控制器刷新，系统每次都要把它重新渲染到每一条菜单栏上，
+/// CPU 和 WindowServer 会一直被占着。
+@MainActor
+public final class MenuBarIcon: ObservableObject {
+    @Published public private(set) var symbol = "ear"
+
+    nonisolated init() {}
+
+    func update(_ symbol: String) {
+        if symbol != self.symbol { self.symbol = symbol }
+    }
+}
+
 /// App 的状态：持有接收核心、UDP 接收和音频输出，定时刷新统计。菜单栏和主窗口共用一个实例。
 @MainActor
 public final class ReceiverController: ObservableObject {
@@ -100,6 +114,8 @@ public final class ReceiverController: ObservableObject {
     @Published public private(set) var lastSenderKind: DeviceKind?
     /// 这台 Mac 的名字（系统设置里的电脑名称）
     public let macName: String
+    /// 菜单栏图标（单独发布，见 MenuBarIcon）
+    public let menuBarIcon = MenuBarIcon()
 
     /// 远端声音的音量，0–2（1 = 100%）
     @Published public var volume: Double {
@@ -107,7 +123,12 @@ public final class ReceiverController: ObservableObject {
     }
 
     @Published public var muted: Bool {
-        didSet { core.setMuted(muted); save(muted, Keys.muted); updateResponderInfo() }
+        didSet {
+            core.setMuted(muted)
+            save(muted, Keys.muted)
+            updateResponderInfo()
+            menuBarIcon.update(menuBarSymbol)
+        }
     }
 
     /// 左右平衡，−1…1
@@ -148,6 +169,9 @@ public final class ReceiverController: ObservableObject {
 
     /// 断开或停止多久之后回到“等待连接”
     nonisolated static let forgetAfter = 60.0
+    /// 统计最多隔这么久发布一次（和曲线采样同一节奏）；状态、发送端、丢包这类变化立即发布。
+    /// 播放时电平和缓冲每个 tick 都在变，每 0.1 秒发布一次会让开着的窗口整页重算
+    nonisolated static let statsPublishInterval = 0.3
 
     public static let appVersion =
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.0"
@@ -164,6 +188,9 @@ public final class ReceiverController: ObservableObject {
     private var lastHistoryUnderruns = 0
     private var outputMonitor: OutputDeviceMonitor?
     private var bufferingSince: Double?
+    private var statsPublishedAt = -Double.infinity
+    /// 音频输出打不开时，隔一会儿再试（不要每 0.1 秒都去碰 coreaudiod）
+    private var outputRetryAt = -Double.infinity
     /// 进入“已停止”或“已断开”的时刻
     private var endedAt: Double?
     private var lastSoundAt = -Double.infinity
@@ -247,6 +274,7 @@ public final class ReceiverController: ObservableObject {
         case .outputFailed(let message): outputError = message
         default: break
         }
+        menuBarIcon.update(menuBarSymbol)
     }
 
     public func resetStatistics() {
@@ -254,7 +282,9 @@ public final class ReceiverController: ObservableObject {
         bitrateWindowBytes = 0
         lastHistoryLost = 0
         lastHistoryUnderruns = 0
-        stats = core.statistics(now: MonotonicClock.now())
+        var fresh = core.statistics(now: MonotonicClock.now())
+        fresh.secondsSinceLastPacket = nil
+        stats = fresh
     }
 
     private func save(_ value: Any, _ key: String) {
@@ -293,9 +323,12 @@ public final class ReceiverController: ObservableObject {
         monitor.onChange = { [weak self] device in
             self?.outputDevice = device
             self?.updateResponderInfo()
+            self?.outputRetryAt = -.infinity // 换了输出设备：立刻再试
         }
         outputDevice = monitor.current
         outputMonitor = monitor
+        // 回复器是在读到输出设备之前建的：补上，Windows 一开始就能画出 Mac 的输出设备
+        updateResponderInfo()
         Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(100))
@@ -308,21 +341,31 @@ public final class ReceiverController: ObservableObject {
     private func startOutput(sampleRate: Double) {
         do {
             try output.start(sampleRate: sampleRate)
-            outputError = nil
+            if outputError != nil { outputError = nil }
         } catch {
-            outputError = "无法打开音频输出：\(error.localizedDescription)"
+            let message = "无法打开音频输出：\(error.localizedDescription)"
+            if outputError != message { outputError = message }
+            outputRetryAt = MonotonicClock.now() + 2
         }
     }
 
     private func tick() {
         let now = MonotonicClock.now()
-        let current = core.statistics(now: now)
-        if current != stats { stats = current }
-        updateLinkState(now: now)
+        var current = core.statistics(now: now)
+        // “距上一个包多少秒”每次都不一样，界面又用不到：留着的话，连过一次之后统计每 0.1 秒都算“变了”，
+        // 停了也一直通知，所有看着控制器的界面跟着重画。@Published 每次赋值都会通知，所以都先比较再赋值。
+        current.secondsSinceLastPacket = nil
+        if current != stats,
+           Self.changesState(from: stats, to: current) || now - statsPublishedAt >= Self.statsPublishInterval {
+            stats = current
+            statsPublishedAt = now
+        }
+        updateLinkState(now: now, current: current)
 
         if now - bitrateWindowStart >= 1 {
-            bitrateKbps = Double(max(0, current.bytesReceived - bitrateWindowBytes)) * 8
+            let bitrate = Double(max(0, current.bytesReceived - bitrateWindowBytes)) * 8
                 / (now - bitrateWindowStart) / 1000
+            if bitrate != bitrateKbps { bitrateKbps = bitrate }
             bitrateWindowStart = now
             bitrateWindowBytes = current.bytesReceived
         }
@@ -333,7 +376,7 @@ public final class ReceiverController: ObservableObject {
             if let since = idleSince, now - since > 3, output.isRunning { output.stop() }
         } else {
             idleSince = nil
-            if !output.isRunning, let format = current.format {
+            if !output.isRunning, let format = current.format, now >= outputRetryAt {
                 startOutput(sampleRate: Double(format.sampleRate))
             }
         }
@@ -354,9 +397,17 @@ public final class ReceiverController: ObservableObject {
         if ticks % 50 == 0 { refreshAddresses() }
     }
 
+    /// 这些变了要马上让界面知道；其余（电平、缓冲水位、计数）按 statsPublishInterval 合并
+    private static func changesState(from old: ReceiverStats, to new: ReceiverStats) -> Bool {
+        old.state != new.state || old.senderAddress != new.senderAddress || old.streamID != new.streamID
+            || old.endedBySender != new.endedBySender || old.format != new.format
+            || old.packetsLost != new.packetsLost || old.underruns != new.underruns
+    }
+
     /// 每次 tick 拿到新统计之后调用：算出去抖后的连接状态、有没有声音、发送端的名字和类型
-    private func updateLinkState(now: Double) {
-        if stats.inputLevelDB > -50 { lastSoundAt = now }
+    private func updateLinkState(now: Double, current stats: ReceiverStats) {
+        // 输出停了以后电平不再更新（停在最后一个值），不能当成还有声音
+        if output.isRunning, stats.inputLevelDB > -50 { lastSoundAt = now }
         let sound = now - lastSoundAt < 1
         if sound != hasSound { hasSound = sound }
 
@@ -392,13 +443,14 @@ public final class ReceiverController: ObservableObject {
             }
         }
         if next != linkState { linkState = next }
-        updateSenderIdentity()
+        updateSenderIdentity(address: stats.senderAddress)
+        menuBarIcon.update(menuBarSymbol)
     }
 
     /// 发送端的名字和类型。名字按优先级取：HELLO 里报的 > 反查 IP 得到的 > nil（界面显示 IP）。
     /// 每个 tick 重新算，反查结果只进缓存，两种来源不会互相覆盖。正在播放时记下来，等待时占位节点用。
-    private func updateSenderIdentity() {
-        guard let address = stats.senderAddress else {
+    private func updateSenderIdentity(address: String?) {
+        guard let address else {
             if senderName != nil { senderName = nil }
             if senderKind != nil { senderKind = nil }
             return

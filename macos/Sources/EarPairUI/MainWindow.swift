@@ -40,7 +40,8 @@ public enum MainSection: String, CaseIterable, Identifiable, Sendable {
 public struct MainWindow: View {
     public static let id = "main"
 
-    @ObservedObject var controller: ReceiverController
+    /// 只往下传，自己不订阅：各页面自己订阅控制器，侧边栏和分栏不用跟着每次更新重算
+    let controller: ReceiverController
     @State private var selection: MainSection?
 
     public init(controller: ReceiverController, initialSection: MainSection = .overview) {

@@ -59,7 +59,10 @@ internal sealed partial class TrayIcon : IDisposable
 
     public void Update(TrayGlyph glyph, string tooltip)
     {
-        if (glyph != _glyph || _icon == IntPtr.Zero)
+        // 图标和提示都没变就不打扰资源管理器（每次 NIM_MODIFY 它都要重画通知区域）
+        bool iconChanged = glyph != _glyph || _icon == IntPtr.Zero;
+        if (!iconChanged && tooltip == _tooltip) return;
+        if (iconChanged)
         {
             _glyph = glyph;
             IntPtr old = _icon;
@@ -67,7 +70,7 @@ internal sealed partial class TrayIcon : IDisposable
             if (old != IntPtr.Zero) DestroyIcon(old);
         }
         _tooltip = tooltip;
-        var data = CreateData(NIF_ICON | NIF_TIP | NIF_SHOWTIP);
+        var data = CreateData(NIF_TIP | NIF_SHOWTIP | (iconChanged ? NIF_ICON : 0));
         Shell_NotifyIconW(NIM_MODIFY, ref data);
     }
 
