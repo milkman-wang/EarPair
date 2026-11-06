@@ -5,21 +5,6 @@ import SwiftUI
 // MARK: - 状态
 
 extension ReceiverStats {
-    var statusTitle: String {
-        switch state {
-        case .idle: return senderAddress == nil ? "等待连接" : "已断开"
-        case .buffering, .playing: return senderAddress ?? "等待连接"
-        }
-    }
-
-    var statusColor: Color {
-        switch state {
-        case .idle: return .secondary
-        case .buffering: return .orange
-        case .playing: return .green
-        }
-    }
-
     var formatText: String? {
         guard let format, senderAddress != nil else { return nil }
         let channels = format.channels == 1 ? "单声道" : "立体声"
@@ -28,16 +13,6 @@ extension ReceiverStats {
 
     /// 正在收发送端的流（缓冲中或播放中）
     var isStreaming: Bool { state != .idle && senderAddress != nil }
-}
-
-struct StatusDot: View {
-    var color: Color
-
-    var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 8, height: 8)
-    }
 }
 
 // MARK: - Liquid Glass（macOS 26 起），macOS 14 / 15 上退回普通样式
@@ -52,28 +27,7 @@ enum Appearance {
     }
 }
 
-extension View {
-    /// 圆形底：新系统是玻璃（打开时着强调色），旧系统是实心圆
-    @ViewBuilder
-    func glassCircle(highlighted: Bool) -> some View {
-        if #available(macOS 26.0, *), Appearance.usesGlass {
-            glassEffect(highlighted ? Glass.regular.tint(.accentColor).interactive() : Glass.regular.interactive(),
-                        in: .circle)
-        } else {
-            background(Circle().fill(highlighted ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary)))
-        }
-    }
-
-    /// 按钮样式：新系统是玻璃，旧系统是带边框
-    @ViewBuilder
-    func glassButtonStyle() -> some View {
-        if #available(macOS 26.0, *), Appearance.usesGlass {
-            buttonStyle(.glass)
-        } else {
-            buttonStyle(.bordered)
-        }
-    }
-}
+// MARK: - 按钮
 
 /// 嵌入式图标按钮：系统原生的无边框样式，按下时高亮
 struct IconButton: View {
@@ -92,82 +46,20 @@ struct IconButton: View {
     }
 }
 
-/// 控制中心式开关：圆形图标（打开时着色）加名称
-struct GlassToggleTile: View {
-    var title: LocalizedStringKey
-    var systemImage: String
-    @Binding var isOn: Bool
-
-    var body: some View {
-        Button {
-            isOn.toggle()
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isOn ? Color.white : Color.primary)
-                    .frame(width: 30, height: 30)
-                    .glassCircle(highlighted: isOn)
-                Text(title)
-                Spacer(minLength: 0)
-            }
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isOn ? .isSelected : [])
-    }
+/// 音量对应的喇叭图标
+private func speakerSymbol(volume: Double, muted: Bool) -> String {
+    if muted { return "speaker.slash.fill" }
+    if volume < 0.5 { return "speaker.wave.1.fill" }
+    if volume < 1.2 { return "speaker.wave.2.fill" }
+    return "speaker.wave.3.fill"
 }
-
-// MARK: - 电平表
-
-/// 横条电平表：−60…0 dBFS，绿 → 黄 → 红
-struct LevelMeter: View {
-    var level: Double
-
-    private static let gradient = LinearGradient(
-        stops: [
-            .init(color: .green, location: 0),
-            .init(color: .green, location: 0.78),
-            .init(color: .yellow, location: 0.9),
-            .init(color: .red, location: 0.98),
-        ],
-        startPoint: .leading, endPoint: .trailing)
-
-    private var fraction: Double { min(max((level + 60) / 60, 0), 1) }
-
-    var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.quaternary)
-                Capsule()
-                    .fill(Self.gradient)
-                    .mask(alignment: .leading) {
-                        Rectangle().frame(width: proxy.size.width * fraction)
-                    }
-            }
-        }
-        .frame(height: 4)
-        .animation(.linear(duration: 0.1), value: fraction)
-        .accessibilityElement()
-        .accessibilityValue(Format.decibels(level))
-    }
-}
-
-// MARK: - 按钮
 
 struct MuteButton: View {
     @Binding var muted: Bool
     var volume: Double
 
-    private var symbol: String {
-        if muted { return "speaker.slash.fill" }
-        if volume < 0.5 { return "speaker.wave.1.fill" }
-        if volume < 1.2 { return "speaker.wave.2.fill" }
-        return "speaker.wave.3.fill"
-    }
-
     var body: some View {
-        IconButton(systemImage: symbol, help: muted ? "取消静音" : "静音") {
+        IconButton(systemImage: speakerSymbol(volume: volume, muted: muted), help: muted ? "取消静音" : "静音") {
             muted.toggle()
         }
     }
@@ -192,54 +84,131 @@ struct CopyButton: View {
     }
 }
 
-/// 本机地址，带复制 Windows 端命令的按钮
-struct AddressRow: View {
-    var address: String
+// MARK: - 行
+
+/// 音量：窗口里是“静音按钮 + 滑块 + 百分比”；面板里喇叭只是图标（静音交给圆钮，和控制中心一样）
+struct VolumeRow: View {
+    enum Style { case form, panel }
+
+    @ObservedObject var controller: ReceiverController
+    var style: Style
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "laptopcomputer")
-                .foregroundStyle(.secondary)
-            Text(verbatim: address)
+            switch style {
+            case .form:
+                MuteButton(muted: $controller.muted, volume: controller.volume)
+            case .panel:
+                Image(systemName: speakerSymbol(volume: controller.volume, muted: controller.muted))
+                    .foregroundStyle(.secondary)
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 18)
+            }
+            VolumeSlider(volume: $controller.volume)
+            Text(verbatim: Format.percent(controller.volume))
                 .monospacedDigit()
-            Spacer()
-            CopyButton(text: "EarPair.Sender \(address)", help: "复制 Windows 端命令")
+                .foregroundStyle(.secondary)
+                .frame(width: style == .panel ? 38 : 44, alignment: .trailing)
         }
     }
 }
 
-/// 音量：静音按钮（可选）、滑块（0–200%）、百分比，下面可选一条输出电平表
-struct VolumeControl: View {
-    @ObservedObject var controller: ReceiverController
-    var showsMute: Bool
-    var showsMeter: Bool
-
-    /// 静音按钮和百分比的固定宽度，让下面的电平表和滑块正好对齐
-    private static let buttonWidth: CGFloat = 22
-    private static let percentWidth: CGFloat = 44
+/// 出错时的一句完整说明
+struct ErrorRow: View {
+    var message: String
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                if showsMute {
-                    MuteButton(muted: $controller.muted, volume: controller.volume)
-                        .frame(width: Self.buttonWidth)
-                }
-                Slider(value: $controller.volume, in: 0...2)
-                Text(Format.percent(controller.volume))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .frame(width: Self.percentWidth, alignment: .trailing)
-            }
-            if showsMeter {
-                HStack(spacing: 10) {
-                    if showsMute {
-                        Color.clear.frame(width: Self.buttonWidth, height: 1)
+        Label {
+            Text(verbatim: message)
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .symbolRenderingMode(.multicolor)
+                .symbolEffect(.bounce, value: message)
+        }
+        .font(.callout)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// 本机地址：每个网卡一行，复制的是 IP（Windows 端要填的就是它）
+struct AddressRows: View {
+    var addresses: [LocalAddress]
+    /// 窗口概览里居中放在 Mac 节点下面，只显示地址
+    var centered: Bool
+
+    var body: some View {
+        VStack(alignment: centered ? .center : .leading, spacing: 6) {
+            ForEach(addresses, id: \.self) { local in
+                HStack(spacing: 6) {
+                    if !centered {
+                        Text(verbatim: local.name).foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
                     }
-                    LevelMeter(level: controller.muted ? -120 : controller.stats.outputLevelDB)
-                    Color.clear.frame(width: Self.percentWidth, height: 1)
+                    Text(verbatim: local.address)
+                        .monospacedDigit()
+                        .foregroundStyle(centered ? .secondary : .primary)
+                        .textSelection(.enabled)
+                    CopyButton(text: local.address, help: "复制地址")
                 }
             }
+        }
+        .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
+    }
+}
+
+/// 连接页每组的第一行：设备圆盘 + 名字，右边放附加信息（比如状态）
+struct DeviceHeaderRow<Accessory: View>: View {
+    var symbol: String
+    var title: String
+    var isPlaceholder = false
+    @ViewBuilder var accessory: Accessory
+
+    var body: some View {
+        HStack(spacing: 10) {
+            CircleGlyph(systemImage: symbol, diameter: 32, isPlaceholder: isPlaceholder)
+            Text(verbatim: title)
+                .font(.headline)
+                .foregroundStyle(isPlaceholder ? .secondary : .primary)
+            Spacer()
+            accessory
+        }
+    }
+}
+
+/// 连接页发送端那一行右边的状态：圆点加文字；等待时只有文字
+struct StatusPill: View {
+    var state: LinkState
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let color {
+                Circle().fill(color).frame(width: 6, height: 6)
+            }
+            Text(verbatim: text).font(.callout).foregroundStyle(.secondary)
+        }
+        .contentTransition(.opacity)
+    }
+
+    private var color: Color? {
+        switch state {
+        case .playing: return .green
+        case .connecting: return .orange
+        case .stopped, .disconnected: return .gray
+        case .receiveFailed, .outputFailed: return .red
+        case .waiting: return nil
+        }
+    }
+
+    private var text: String {
+        switch state {
+        case .waiting: return "等待连接"
+        case .connecting: return "正在连接"
+        case .playing: return "正在播放"
+        case .stopped: return "已停止"
+        case .disconnected: return "已断开"
+        case .receiveFailed: return "无法接收"
+        case .outputFailed: return "无法播放"
         }
     }
 }
@@ -270,6 +239,19 @@ enum Format {
 
     static func ppm(_ value: Double) -> String { minus(String(format: "%+.0f ppm", value)) }
 
+    /// 0 → "0"；小于 0.01 → "<0.01"（不显示成 0.00）；小于 1 → 两位小数；否则一位小数（单位 % 另外画）
+    static func lossPercent(_ percent: Double) -> String {
+        if percent == 0 { return "0" }
+        if percent < 0.01 { return "<0.01" }
+        return percent < 1 ? String(format: "%.2f", percent) : String(format: "%.1f", percent)
+    }
+
+    /// 69467 → "69,467"
+    static func count(_ value: Int) -> String { value.formatted() }
+
+    /// kbps → "1.59 Mbps"
+    static func megabits(_ kbps: Double) -> String { String(format: "%.2f Mbps", kbps / 1000) }
+
     /// 时长：m:ss 或 h:mm:ss
     static func duration(_ seconds: Double) -> String {
         let s = Int(seconds)
@@ -277,4 +259,12 @@ enum Format {
             ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60)
             : String(format: "%d:%02d", s / 60, s % 60)
     }
+}
+
+extension MetricColumn.Tone {
+    static func loss(_ percent: Double) -> Self {
+        percent == 0 ? .calm : percent <= 0.5 ? .normal : percent <= 3 ? .warning : .critical
+    }
+
+    static func underruns(_ count: Int) -> Self { count == 0 ? .calm : count < 5 ? .warning : .critical }
 }

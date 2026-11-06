@@ -70,7 +70,8 @@ public struct MainWindow: View {
             }
             .navigationTitle(section.title)
         }
-        .frame(minWidth: 740, minHeight: 500)
+        // 表单超过 1100 pt 宽以后，标签和数值之间全是空白：限制最大宽度（系统设置也是这样）
+        .frame(minWidth: 760, idealWidth: 900, maxWidth: 1120, minHeight: 520, idealHeight: 640)
         // 窗口打开时出现在 Dock 和 ⌘Tab 里，关掉后回到只在菜单栏
         .onAppear { NSApp.setActivationPolicy(.regular) }
         .onDisappear { NSApp.setActivationPolicy(.accessory) }

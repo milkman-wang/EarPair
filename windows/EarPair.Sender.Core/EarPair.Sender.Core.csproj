@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 发送端核心：WASAPI loopback 采集、格式转换、打包、UDP 发送。控制台程序和 WinUI App 共用。 -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>EarPair.Sender</RootNamespace>
+    <!-- 允许在 Mac / Linux 上编译检查（运行仍然需要 Windows） -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 只引用 WASAPI 部分（会自动带上 NAudio.Core） -->
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+  </ItemGroup>
+
+</Project>

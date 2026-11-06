@@ -1,0 +1,403 @@
+using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
+using EarPair.App.Interop;
+using EarPair.App.Services;
+using EarPair.App.ViewModels;
+using EarPair.Sender;
+using Microsoft.UI;
+using Microsoft.UI.Composition.SystemBackdrops;
+using Microsoft.UI.Dispatching;
+using Microsoft.UI.Input;
+using Microsoft.UI.Windowing;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Markup;
+using Microsoft.UI.Xaml.Media;
+using Windows.Foundation;
+using Windows.Graphics;
+
+namespace EarPair.App;
+
+/// <summary>发现列表里的一行：名字（只有两台 Mac 重名时才在后面加 IP）和图标</summary>
+public sealed class MacListItem(DiscoveredMac mac, string title)
+{
+    public DiscoveredMac Mac { get; } = mac;
+    public string Title { get; } = title;
+    public string Glyph => StatusDescriber.MacGlyph(Mac.Kind);
+}
+
+/// <summary>主窗口：单页。上面是主卡片（状态、发送开关、路线、提示），下面四张设置卡。</summary>
+public sealed partial class MainWindow : Window
+{
+    private readonly App _app = App.Current;
+    private readonly DispatcherQueueTimer _meter;
+    private bool _updating;
+    private double _level = -120;
+    private double _hold;
+    private IReadOnlyList<AudioDeviceInfo> _devices = [];
+    private RectInt32? _moreButtonRegion;
+    private bool _closed;
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        Title = "EarPair";
+        if (MicaController.IsSupported())
+        {
+            SystemBackdrop = new MicaBackdrop();
+            Root.Background = new SolidColorBrush(Colors.Transparent);
+        }
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
+        AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
+        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "EarPair.ico"));
+        double width = _app.Settings.WindowWidth >= 560 ? _app.Settings.WindowWidth : 680;
+        double height = _app.Settings.WindowHeight >= 560 ? _app.Settings.WindowHeight : 700;
+        WindowHelper.ResizeAndCenter(this, (int)width, (int)height);
+        WindowHelper.SetMinimumSize(this, 560, 560);
+        AppWindow.Changed += OnAppWindowChanged;
+        AppTitleBar.SizeChanged += (_, _) => UpdateTitleBarRegions();
+        MoreButton.LayoutUpdated += OnMoreButtonLayoutUpdated;
+
+        // 只在有光点在走、窗口看得见时才取电平
+        _meter = DispatcherQueue.CreateTimer();
+        _meter.Interval = TimeSpan.FromMilliseconds(33);
+        _meter.Tick += (_, _) => UpdateMeter();
+        _app.StateChanged += Refresh;
+        _app.DevicesChanged += RefreshDevices;
+        Closed += (_, _) =>
+        {
+            // 窗口正在销毁：之后不再碰 AppWindow 和标题栏区域
+            _closed = true;
+            MoreButton.LayoutUpdated -= OnMoreButtonLayoutUpdated;
+            AppWindow.Changed -= OnAppWindowChanged;
+            _meter.Stop();
+            _app.StateChanged -= Refresh;
+            _app.DevicesChanged -= RefreshDevices;
+        };
+
+        RefreshDevices();
+        Refresh();
+    }
+
+    public void ShowAndActivate()
+    {
+        AppWindow.Show();
+        Activate();
+        WindowHelper.BringToFront(this);
+    }
+
+    /// <summary>界面用指定的深浅色（--demo 截图用）</summary>
+    public void SetTheme(ElementTheme theme)
+    {
+        if (Content is FrameworkElement root) root.RequestedTheme = theme;
+    }
+
+    /// <summary>
+    /// 标题栏：右边给系统按钮留出位置（RightInset 是物理像素，要按缩放比例换算），
+    /// “⋯”按钮那一块设成可点击区域，其余部分可以拖动窗口。
+    /// </summary>
+    private void OnMoreButtonLayoutUpdated(object? sender, object e) => UpdateTitleBarRegions();
+
+    private void UpdateTitleBarRegions()
+    {
+        if (_closed || Content?.XamlRoot is not { } root || MoreButton.ActualWidth <= 0) return;
+        double scale = root.RasterizationScale;
+        double right = AppWindow.TitleBar.RightInset / scale;
+        if (Math.Abs(AppTitleBar.Padding.Right - right) > 0.5) AppTitleBar.Padding = new Thickness(16, 0, right, 0);
+        Rect bounds = MoreButton.TransformToVisual(null)
+            .TransformBounds(new Rect(0, 0, MoreButton.ActualWidth, MoreButton.ActualHeight));
+        var region = new RectInt32((int)Math.Round(bounds.X * scale), (int)Math.Round(bounds.Y * scale),
+                                   (int)Math.Round(bounds.Width * scale), (int)Math.Round(bounds.Height * scale));
+        if (_moreButtonRegion is { } previous && previous.Equals(region)) return;
+        _moreButtonRegion = region;
+        InputNonClientPointerSource.GetForWindowId(AppWindow.Id).SetRegionRects(NonClientRegionKind.Passthrough, [region]);
+    }
+
+    // MARK: - 刷新
+
+    private void Refresh()
+    {
+        _updating = true;
+        try
+        {
+            StatusView status = _app.Status;
+            MacTarget? target = _app.Settings.Target;
+
+            bool picking = status.Path is null;
+            StatusRow.Visibility = picking ? Visibility.Collapsed : Visibility.Visible;
+            Route.Visibility = picking ? Visibility.Collapsed : Visibility.Visible;
+            Picker.Visibility = picking ? Visibility.Visible : Visibility.Collapsed;
+            TargetRow.Visibility = picking ? Visibility.Collapsed : Visibility.Visible;
+
+            StatusTitle.Text = status.Title;
+            SendSwitch.IsOn = _app.SwitchOn;
+            if (status.Path is { } path) Route.Apply(path, status.PathDescription);
+            else RefreshPicker();
+            ShowNotice(status.Notice);
+
+            TargetButton.Content = target is null ? "选择 Mac" : App.MacTitle(target, _app.AvailableMacs());
+            MuteSwitch.IsOn = _app.Settings.MuteLocal;
+            string? device = _app.Engine.Snapshot.DeviceId ?? _app.Settings.DeviceId;
+            bool cannotMute = device is not null && _app.Settings.PostMuteDevices.Contains(device);
+            MuteSwitch.IsEnabled = !cannotMute;
+            ToolTipService.SetToolTip(MuteSwitch, cannotMute ? "这个设备静音后采集不到声音" : null);
+            StartupSwitch.IsOn = Autostart.IsEnabled;
+            UpdateMeterTimer();
+        }
+        finally
+        {
+            _updating = false;
+        }
+    }
+
+    private void ShowNotice(NoticeView? notice)
+    {
+        if (notice is null)
+        {
+            Notice.IsOpen = false;
+            Notice.Visibility = Visibility.Collapsed;
+            return;
+        }
+        Notice.Message = notice.Text;
+        Notice.Severity = notice.Kind switch
+        {
+            NoticeKind.Warning => InfoBarSeverity.Warning,
+            NoticeKind.Error => InfoBarSeverity.Error,
+            _ => InfoBarSeverity.Informational,
+        };
+        Notice.IsClosable = notice.Closable;
+        bool hasAction = notice.ActionText is not null;
+        NoticeButton.Visibility = hasAction ? Visibility.Visible : Visibility.Collapsed;
+        NoticeButton.Content = notice.ActionText;
+        NoticeButton.Tag = notice.Action;
+        Notice.Tag = notice.Action;
+        Notice.Visibility = Visibility.Visible;
+        Notice.IsOpen = true;
+    }
+
+    private void RefreshPicker()
+    {
+        IReadOnlyList<DiscoveredMac> macs = _app.Discovery.Macs;
+        HashSet<string> repeated = macs.GroupBy(m => m.Name).Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet();
+        MacList.ItemsSource = macs
+            .Select(m => new MacListItem(m, repeated.Contains(m.Name) ? $"{m.Name}（{m.Address}）" : m.Name))
+            .ToList();
+        bool done = _app.Discovery.EnumerationCompleted;
+        PickerRing.Visibility = done ? Visibility.Collapsed : Visibility.Visible;
+        PickerRing.IsActive = !done;
+        RescanButton.Visibility = done ? Visibility.Visible : Visibility.Collapsed;
+        MacList.Visibility = macs.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        EmptyState.Visibility = done && macs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void RefreshDevices()
+    {
+        _updating = true;
+        try
+        {
+            _devices = SenderEngine.ListDevices();
+            AudioDeviceInfo? systemDefault = _devices.FirstOrDefault(d => d.IsDefault);
+            var items = new List<string> { systemDefault is null ? "系统默认" : $"系统默认（{systemDefault.Name}）" };
+            items.AddRange(_devices.Select(d => d.Name));
+            DeviceBox.ItemsSource = items;
+            int index = _app.Settings.DeviceId is { } id ? _devices.ToList().FindIndex(d => d.Id == id) : -1;
+            DeviceBox.SelectedIndex = index >= 0 ? index + 1 : 0;
+        }
+        finally
+        {
+            _updating = false;
+        }
+    }
+
+    // MARK: - 电平
+
+    private void UpdateMeterTimer()
+    {
+        if (_closed) return;
+        if (Route.HasFlowing && AppWindow.IsVisible)
+        {
+            _meter.Start();
+            return;
+        }
+        _meter.Stop();
+        _level = -120;
+        Route.SetIntensity(0);
+    }
+
+    /// <summary>每 33 ms：取峰值，峰值保持 1 秒、每秒回落 24 dB（和 Mac 一致）；光点亮度 = (dB + 50) / 40</summary>
+    private void UpdateMeter()
+    {
+        if (!AppWindow.IsVisible) return;
+        float peak = _app.TakePeak();
+        double db = peak > 0 ? 20 * Math.Log10(peak) : -120;
+        const double dt = 0.033;
+        if (db >= _level)
+        {
+            _level = db;
+            _hold = 1.0;
+        }
+        else if (_hold > 0)
+        {
+            _hold -= dt;
+        }
+        else
+        {
+            _level = Math.Max(db, _level - 24 * dt);
+        }
+        Route.SetIntensity((float)Math.Clamp((_level + 50) / 40, 0, 1));
+    }
+
+    // MARK: - 操作
+
+    private void OnSendToggled(object sender, RoutedEventArgs e)
+    {
+        if (_updating) return;
+        if (SendSwitch.IsOn) _app.StartSending();
+        else _app.StopSending();
+    }
+
+    private void OnNoticeAction(object sender, RoutedEventArgs e)
+    {
+        switch (NoticeButton.Tag)
+        {
+            case NoticeAction.SendAnyway:
+                _app.StartSending(ignoreSilence: true);
+                break;
+            case NoticeAction.Retry:
+                _app.StartSending();
+                break;
+        }
+    }
+
+    private void OnNoticeClosed(InfoBar sender, object args)
+    {
+        if (sender.Tag is NoticeAction.DismissPostMute) _app.DismissPostMuteNotice();
+    }
+
+    private void OnRescan(object sender, RoutedEventArgs e) => _app.Discovery.Restart();
+
+    private void OnMacClicked(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is MacListItem item) _app.SelectDiscovered(item.Mac);
+    }
+
+    private async void OnEnterAddress(object sender, RoutedEventArgs e) => await ShowAddressDialogAsync();
+
+    public async void ShowAddressDialog() => await ShowAddressDialogAsync();
+
+    private void OnOpenLogs(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Directory.CreateDirectory(AppLog.Folder);
+            Process.Start(new ProcessStartInfo { FileName = AppLog.Folder, UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception)
+        {
+            // 打不开就算了
+        }
+    }
+
+    private void OnQuit(object sender, RoutedEventArgs e) => _app.Quit();
+
+    private void OnTargetMenuOpening(object? sender, object e)
+    {
+        TargetMenu.Items.Clear();
+        IReadOnlyList<MacTarget> macs = _app.AvailableMacs();
+        foreach (MacTarget mac in macs)
+        {
+            var item = new RadioMenuFlyoutItem
+            {
+                Text = App.MacTitle(mac, macs),
+                IsChecked = _app.Settings.Target?.Matches(mac) == true,
+                GroupName = "mac",
+            };
+            item.Click += (_, _) => _app.SelectTarget(mac);
+            TargetMenu.Items.Add(item);
+        }
+        if (TargetMenu.Items.Count > 0) TargetMenu.Items.Add(new MenuFlyoutSeparator());
+        var enter = new MenuFlyoutItem { Text = "输入地址…", Icon = new FontIcon { Glyph = "" } };
+        enter.Click += async (_, _) => await ShowAddressDialogAsync();
+        TargetMenu.Items.Add(enter);
+    }
+
+    private void OnDeviceChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_updating || DeviceBox.SelectedIndex < 0) return;
+        _app.Settings.DeviceId = DeviceBox.SelectedIndex == 0 ? null : _devices[DeviceBox.SelectedIndex - 1].Id;
+        _app.ApplySettings();
+    }
+
+    private void OnMuteToggled(object sender, RoutedEventArgs e)
+    {
+        if (_updating) return;
+        _app.Settings.MuteLocal = MuteSwitch.IsOn;
+        _app.ApplySettings();
+    }
+
+    private void OnStartupToggled(object sender, RoutedEventArgs e)
+    {
+        if (_updating) return;
+        Autostart.SetEnabled(StartupSwitch.IsOn);
+    }
+
+    private void OnAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
+    {
+        if (args.DidVisibilityChange) UpdateMeterTimer();
+        if (args.DidSizeChange || args.DidPresenterChange) UpdateTitleBarRegions();
+        if (!args.DidSizeChange || !sender.IsVisible) return;
+        double scale = WindowHelper.Scale(this);
+        _app.Settings.WindowWidth = Math.Round(sender.Size.Width / scale);
+        _app.Settings.WindowHeight = Math.Round(sender.Size.Height / scale);
+    }
+
+    /// <summary>手动输入 Mac 的地址（IP 或主机名，xxx.local 也行），确认能解析再保存</summary>
+    private async Task ShowAddressDialogAsync()
+    {
+        var box = new TextBox { PlaceholderText = "192.168.1.20", Text = _app.Settings.Target?.Host ?? "" };
+        // 用 XAML 建，颜色才能跟着主题走
+        var error = (TextBlock)XamlReader.Load(
+            "<TextBlock xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' Text='找不到这个地址' " +
+            "Visibility='Collapsed' Foreground='{ThemeResource SystemFillColorCriticalBrush}' />");
+        var dialog = new ContentDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            Title = "输入 Mac 的地址",
+            Content = new StackPanel { Spacing = 8, Children = { box, error } },
+            PrimaryButtonText = "连接",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary,
+            RequestedTheme = (Content as FrameworkElement)?.ActualTheme ?? ElementTheme.Default,
+        };
+        dialog.PrimaryButtonClick += async (_, args) =>
+        {
+            ContentDialogButtonClickDeferral deferral = args.GetDeferral();
+            string host = box.Text.Trim();
+            bool ok = host.Length > 0 && await Resolves(host);
+            error.Visibility = ok ? Visibility.Collapsed : Visibility.Visible;
+            args.Cancel = !ok;
+            deferral.Complete();
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        string address = box.Text.Trim();
+        MacTarget? known = _app.AvailableMacs()
+            .FirstOrDefault(m => string.Equals(m.Host, address, StringComparison.OrdinalIgnoreCase));
+        _app.SelectTarget(known ?? new MacTarget { Name = address, Host = address });
+    }
+
+    private static async Task<bool> Resolves(string host)
+    {
+        if (IPAddress.TryParse(host, out IPAddress? ip)) return ip.AddressFamily == AddressFamily.InterNetwork;
+        try
+        {
+            IPAddress[] addresses = await Dns.GetHostAddressesAsync(host).WaitAsync(TimeSpan.FromSeconds(3));
+            return addresses.Any(a => a.AddressFamily == AddressFamily.InterNetwork);
+        }
+        catch (Exception ex) when (ex is SocketException or TimeoutException or ArgumentException)
+        {
+            return false;
+        }
+    }
+}

@@ -31,6 +31,10 @@ public enum IngestResult: Equatable, Sendable {
 public struct ReceiverStats: Equatable, Sendable {
     public var state: PlaybackState = .idle
     public var senderAddress: String?
+    /// 当前（或最近一个）流的 ID
+    public var streamID: UInt32?
+    /// 现在是 idle，并且最近一个流是发送端用 BYE 结束的（不是超时断开）
+    public var endedBySender = false
     public var format: StreamFormat?
     public var packetsReceived = 0
     public var packetsLost = 0
@@ -133,6 +137,12 @@ public final class ReceiverCore: @unchecked Sendable {
         var samples: [Float]
     }
 
+    /// 被发送端用 BYE 结束的流
+    private struct EndedStream {
+        let sender: String
+        let id: UInt32
+    }
+
     private let lock = UnfairLock()
 
     // ---- 以下状态都受 lock 保护 ----
@@ -141,6 +151,8 @@ public final class ReceiverCore: @unchecked Sendable {
     private var ring: StereoRing?
     private var pending: [UInt32: PendingPacket] = [:]
     private var state: PlaybackState = .idle
+    /// 最近一个被 BYE 结束的流；开始新流时清掉
+    private var endedStream: EndedStream?
     /// 当前流是否已经开始播放过（开播前因为音频输出还没启动而丢掉的积压数据不算"裁剪"）
     private var hasPlayed = false
     private var fadeInNextPacket = false
@@ -288,15 +300,34 @@ public final class ReceiverCore: @unchecked Sendable {
     public func housekeeping(now: Double) {
         lock.withLock {
             guard let s = stream, state != .idle, now - s.lastArrival > config.streamTimeout else { return }
-            state = .idle
-            ring?.clear()
-            pending.removeAll()
-            levelEpoch += 1
+            endStreamLocked()
         }
+    }
+
+    /// 发送端说它停了（控制包 BYE）：是当前流就立即进入 idle，不等超时。
+    /// 之后同一个流迟到的包都忽略，不会再“连上”一次；同一个发送端换了新流照常开始。
+    public func endStream(_ id: UInt32, from sender: String) {
+        lock.withLock {
+            guard let s = stream, s.id == id, s.senderAddress == sender, state != .idle else { return }
+            endStreamLocked()
+            endedStream = EndedStream(sender: sender, id: id)
+        }
+    }
+
+    private func endStreamLocked() {
+        state = .idle
+        ring?.clear()
+        pending.removeAll()
+        levelEpoch += 1
     }
 
     private func ingestLocked(_ header: PacketHeader, frames: Int, sender: String, now: Double,
                               startedFormat: inout StreamFormat?) -> IngestResult {
+        if let ended = endedStream, ended.id == header.streamID, ended.sender == sender {
+            // BYE 之后还在路上的包
+            counters.packetsIgnored += 1
+            return .ignored
+        }
         if let s = stream, s.id == header.streamID, state != .idle {
             // 当前流的包，往下走
         } else if let s = stream, state != .idle, s.senderAddress != sender,
@@ -343,6 +374,7 @@ public final class ReceiverCore: @unchecked Sendable {
     }
 
     private func beginStream(_ header: PacketHeader, sender: String, now: Double) {
+        endedStream = nil
         let format = StreamFormat(sampleRate: Int(header.sampleRate), channels: Int(header.channels))
         stream = Stream(id: header.streamID, format: format, senderAddress: sender,
                         nextSequence: header.sequence, nextSampleTime: header.sampleTime, lastArrival: now)
@@ -654,6 +686,7 @@ public final class ReceiverCore: @unchecked Sendable {
         lock.withLock {
             var result = counters
             result.state = state
+            result.endedBySender = state == .idle && endedStream != nil
             result.targetMs = config.targetLatency * 1000
             result.jitterMs = jitter * 1000
             result.driftPPM = driftEstimatePPM
@@ -664,6 +697,7 @@ public final class ReceiverCore: @unchecked Sendable {
             result.isLimiting = meters.isLimiting
             if let s = stream {
                 result.senderAddress = s.senderAddress
+                result.streamID = s.id
                 result.format = s.format
                 result.secondsSinceLastPacket = now - s.lastArrival
                 // 播放中显示平滑后的水位（和缓冲目标同一口径），否则显示当前缓冲量

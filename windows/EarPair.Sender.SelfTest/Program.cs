@@ -2,6 +2,7 @@
 //   dotnet run                              检查格式转换、打包、参数解析
 //   dotnet run -- send <IP> [秒数] [端口]    用发送端的转换和打包代码发 440 Hz 测试音
 //                                           （模拟 WASAPI：48 kHz 立体声浮点，每 10 ms 一块）
+//   dotnet run -- hello <IP> [端口]          发 HELLO，等接收端回 STATUS（检查两端的控制包实现一致）
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Globalization;
@@ -10,12 +11,15 @@ using NAudio.Wave;
 
 if (args.Length > 0 && args[0] == "send")
     return Send(args);
+if (args.Length > 0 && args[0] == "hello")
+    return Hello(args);
 
 int failures = 0;
 Console.WriteLine("EarPair 发送端自检");
 TestPacketEncoder();
 TestPcmConverter();
 TestOptions();
+TestControlPacket();
 Console.WriteLine(failures == 0 ? "全部通过" : $"{failures} 项没通过");
 return failures == 0 ? 0 : 1;
 
@@ -122,6 +126,38 @@ void TestOptions()
     Check(Throws(() => Options.Parse(new[] { "--bogus" })), "未知参数报错");
 }
 
+void TestControlPacket()
+{
+    Console.WriteLine("控制包：");
+    byte[] bye = ControlPacket.Encode(new ByeMessage(16909060));
+    byte[] expected = System.Convert.FromHexString("4541524301051300" + "7b2273747265616d223a31363930393036307d");
+    Check(bye.AsSpan().SequenceEqual(expected), "BYE 和协议文档里的测试向量逐字节一致");
+
+    byte[] probe = ControlPacket.Encode(new HelloMessage(null, null, null, null, 1));
+    Check(probe.AsSpan().SequenceEqual(System.Convert.FromHexString("4541524301030c00" + "7b2273747265616d223a317d")),
+          "HELLO {\"stream\":1} 和协议文档里的测试向量逐字节一致");
+
+    byte[] hello = ControlPacket.Encode(new HelloMessage("abc", "DESKTOP-7Q2", "desktop", "0.2.0", 7));
+    Check(ControlPacket.TryParse(hello, out ControlPacket.Kind kind, out ReadOnlySpan<byte> helloBody) &&
+          kind == ControlPacket.Kind.Hello &&
+          System.Text.Encoding.UTF8.GetString(helloBody).Contains("\"kind\":\"desktop\""),
+          "HELLO 带上 kind，能解析回来");
+
+    byte[] status = ControlPacket.Encode(ControlPacket.Kind.Status, System.Text.Encoding.UTF8.GetBytes(
+        """{"id":"5f0e","name":"MacBook Air","kind":"laptop","stream":7,"state":"playing","lost":2,"output":"耳机","transport":"headphones","new":[1]}"""));
+    StatusMessage? parsed = ControlPacket.ParseStatus(status);
+    Check(parsed is { Name: "MacBook Air", Kind: "laptop", Stream: 7, IsPlaying: true, Lost: 2, Output: "耳机",
+                      Transport: "headphones" },
+          "STATUS 能解析（kind、headphones），不认识的字段忽略");
+
+    byte[] wrongLength = status.Concat(new byte[] { 0x20 }).ToArray();
+    Check(ControlPacket.ParseStatus(wrongLength) is null, "长度不符的包丢掉");
+    byte[] wrongVersion = (byte[])status.Clone();
+    wrongVersion[4] = 2;
+    Check(ControlPacket.ParseStatus(wrongVersion) is null, "版本不对的包丢掉");
+    Check(ControlPacket.ParseStatus(hello) is null, "HELLO 不会被当成 STATUS");
+}
+
 static short[] Convert(WaveFormat format, byte[] bytes)
 {
     var converter = new PcmConverter(format);
@@ -148,6 +184,28 @@ static bool Throws(Action action)
     {
         return true;
     }
+}
+
+static int Hello(string[] args)
+{
+    string host = args.Length > 1 ? args[1] : "127.0.0.1";
+    int port = args.Length > 2 ? int.Parse(args[2], CultureInfo.InvariantCulture) : Options.DefaultPort;
+    using var link = new UdpSender(host, port, receive: true);
+    using var received = new ManualResetEventSlim(false);
+    StatusMessage? status = null;
+    link.ControlReceived += packet =>
+    {
+        status = ControlPacket.ParseStatus(packet);
+        if (status is not null) received.Set();
+    };
+    link.SendControl(ControlPacket.Encode(new HelloMessage("selftest", "自检", "desktop", "0.2.0", 0)));
+    if (!received.Wait(TimeSpan.FromSeconds(3)))
+    {
+        Console.WriteLine($"3 秒内没有收到 {host}:{port} 的 STATUS");
+        return 1;
+    }
+    Console.WriteLine($"收到 STATUS：{status!.Name}，状态 {status.State}，输出 {status.Output ?? "（无）"}");
+    return status.State == "idle" && !string.IsNullOrEmpty(status.Name) ? 0 : 1;
 }
 
 static int Send(string[] args)

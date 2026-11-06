@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="EarPair.App/EarPair.App.csproj">
+    <Platform Project="x64" />
+  </Project>
+  <Project Path="EarPair.Sender.Core/EarPair.Sender.Core.csproj" />
+  <Project Path="EarPair.Sender.SelfTest/EarPair.Sender.SelfTest.csproj" />
+  <Project Path="EarPair.Sender/EarPair.Sender.csproj" />
+</Solution>

@@ -18,8 +18,8 @@ struct EarPairApp: App {
         Window("EarPair", id: MainWindow.id) {
             MainWindow(controller: controller)
         }
-        .windowResizability(.contentMinSize)
-        .defaultSize(width: 900, height: 620)
+        .windowResizability(.contentSize)
+        .defaultSize(width: 900, height: 640)
         .defaultPosition(.center)
     }
 }
@@ -30,7 +30,7 @@ struct MenuBarLabel: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Image(systemName: controller.isPlaying ? "ear.fill" : "ear")
+        Image(systemName: controller.menuBarSymbol)
             .onAppear {
                 if CommandLine.arguments.contains("--show-window") {
                     NSApp.activate()

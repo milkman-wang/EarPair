@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    EarPair 的 Windows 界面（WinUI 3）。非打包（不需要 MSIX、不用装证书），
+    .NET 运行时和 Windows App SDK 都打进去（自包含），解压就能运行。
+    打包：dotnet publish -c Release -r win-x64（或 win-arm64）
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <RootNamespace>EarPair.App</RootNamespace>
+    <AssemblyName>EarPair</AssemblyName>
+    <Product>EarPair</Product>
+    <Version>0.2.0</Version>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\EarPair.ico</ApplicationIcon>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <!-- 非打包 App 也要生成 resources.pri，否则发布目录里缺编译后的 XAML，启动就崩 -->
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <SatelliteResourceLanguages>zh-Hans;en</SatelliteResourceLanguages>
+    <!-- 自己写 Main：单实例 -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 只引用用得到的 Windows App SDK 组件；整包会带上 AI / ML / 搜索组件，多 40 MB 以上 -->
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.6.5" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" Version="2.6.5" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2957" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EarPair.Sender.Core\EarPair.Sender.Core.csproj" />
+  </ItemGroup>
+
+  <!-- 发布后删掉用不上的界面语言（Windows App SDK 自带 80 多种），只留简体中文、繁体中文、日语和英语 -->
+  <Target Name="RemoveUnusedLanguages" AfterTargets="Publish">
+    <ItemGroup>
+      <_EarPairLanguageDir Include="$([System.IO.Directory]::GetDirectories('$(PublishDir)'))" />
+      <_EarPairUnusedLanguage Include="@(_EarPairLanguageDir)"
+          Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Filename)%(Extension)', '^[a-z]{2,3}(-[A-Za-z]+)+$')) And !$([System.Text.RegularExpressions.Regex]::IsMatch('%(Filename)%(Extension)', '^(en-us|en-US|zh-CN|zh-TW|ja-JP)$'))" />
+    </ItemGroup>
+    <RemoveDir Directories="@(_EarPairUnusedLanguage)" />
+  </Target>
+
+</Project>

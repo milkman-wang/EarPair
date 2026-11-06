@@ -38,7 +38,7 @@ if [[ -z "$DOTNET" && -x "$HOME/.dotnet/dotnet" ]]; then DOTNET="$HOME/.dotnet/d
 if [[ -n "$DOTNET" ]]; then
   export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
   "$DOTNET" build "$ROOT/windows/EarPair.Sender.SelfTest" -c Release >/dev/null
-  run csharp "" "" "$DOTNET" "$ROOT/windows/EarPair.Sender.SelfTest/bin/Release/net8.0/EarPair.Sender.SelfTest.dll" \
+  run csharp "" "" "$DOTNET" "$ROOT/windows/EarPair.Sender.SelfTest/bin/Release/net10.0/EarPair.Sender.SelfTest.dll" \
     send 127.0.0.1 25 $PORT
 else
   echo "（没找到 dotnet，跳过 C# 发送端这一轮）"

@@ -1,8 +1,6 @@
 using System.Diagnostics;
-using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
-using NAudio.CoreAudioApi;
 
 namespace EarPair.Sender;
 
@@ -32,10 +30,12 @@ internal static class Program
 
         try
         {
-            var enumerator = new MMDeviceEnumerator();
+            IReadOnlyList<AudioDeviceInfo> devices = SenderEngine.ListDevices();
             if (options.ListDevices)
             {
-                ListDevices(enumerator);
+                Console.WriteLine("输出设备（* 为当前默认设备）：");
+                foreach (AudioDeviceInfo device in devices)
+                    Console.WriteLine($"  {(device.IsDefault ? "*" : " ")} {device.Name}");
                 return 0;
             }
             if (options.Host is null)
@@ -46,94 +46,79 @@ internal static class Program
                 return 2;
             }
 
-            MMDevice? device = FindDevice(enumerator, options.DeviceFilter);
-            if (device is null)
+            string? deviceId = null; // 不指定设备时跟随系统默认输出设备
+            if (!string.IsNullOrWhiteSpace(options.DeviceFilter))
             {
-                Console.Error.WriteLine($"找不到名称包含“{options.DeviceFilter}”的输出设备，用 --list-devices 查看。");
-                return 1;
+                AudioDeviceInfo? match = devices.FirstOrDefault(
+                    d => d.Name.Contains(options.DeviceFilter, StringComparison.OrdinalIgnoreCase));
+                if (match is null)
+                {
+                    Console.Error.WriteLine($"找不到名称包含“{options.DeviceFilter}”的输出设备，用 --list-devices 查看。");
+                    return 1;
+                }
+                deviceId = match.Id;
             }
-            return Run(options, options.Host, device);
+            return Run(options, options.Host, deviceId);
         }
-        catch (Exception ex) when (ex is SocketException or NotSupportedException or COMException)
+        catch (COMException ex)
         {
             Console.Error.WriteLine($"出错了：{ex.Message}");
             return 1;
         }
     }
 
-    private static int Run(Options options, string host, MMDevice device)
+    private static int Run(Options options, string host, string? deviceId)
     {
-        using var sender = new UdpSender(host, options.Port);
-        using var capture = new AudioCapture(device, options.KeepAlive);
-        uint streamId = (uint)Random.Shared.NextInt64(1, uint.MaxValue);
-        var encoder = new PacketEncoder(capture.SampleRate, options.FramesPerPacket, streamId);
-
+        using var engine = new SenderEngine();
         using var stopped = new ManualResetEventSlim(false);
-        Exception? failure = null;
-        capture.FramesCaptured += (samples, frames) => encoder.Append(samples.AsSpan(0, frames * 2), sender.Send);
-        capture.Stopped += ex =>
-        {
-            failure = ex;
-            stopped.Set();
-        };
         Console.CancelKeyPress += (_, e) =>
         {
             e.Cancel = true;
             stopped.Set();
         };
 
-        Console.WriteLine("EarPair 发送端 0.1");
-        Console.WriteLine($"  采集设备：{device.FriendlyName}");
-        Console.WriteLine($"  采集格式：{capture.FormatDescription}");
-        Console.WriteLine($"  发送：{capture.SampleRate} Hz 立体声 16-bit → {host}:{options.Port}，每包 {options.FramesPerPacket} 帧");
-        if (capture.ChannelCount > 2)
-            Console.WriteLine("  提示：这个输出设备是多声道，已混成立体声。在 Windows 声音设置里把它改成立体声效果更好。");
+        Console.WriteLine("EarPair 发送端 0.2");
+        SenderSnapshot? shown = null;
+        engine.Changed += () =>
+        {
+            SenderSnapshot s = engine.Snapshot;
+            if (shown is not null && shown.State == s.State && shown.DeviceName == s.DeviceName && shown.Error == s.Error)
+                return;
+            shown = s;
+            switch (s.State)
+            {
+                case SenderState.Sending:
+                    Console.WriteLine($"  采集设备：{s.DeviceName}{(deviceId is null ? "（跟随系统默认设备）" : "")}");
+                    Console.WriteLine($"  采集格式：{s.FormatDescription}");
+                    Console.WriteLine($"  发送：{s.SampleRate} Hz 立体声 16-bit → {host}:{options.Port}，每包 {options.FramesPerPacket} 帧");
+                    if (s.ChannelCount > 2)
+                        Console.WriteLine("  提示：这个输出设备是多声道，已混成立体声。在 Windows 声音设置里把它改成立体声效果更好。");
+                    break;
+                case SenderState.WaitingForDevice:
+                    Console.WriteLine("  等待输出设备……（设备回来后自动继续）");
+                    break;
+                case SenderState.Failed:
+                    Console.WriteLine($"  出错了：{s.Error}（稍后自动重试）");
+                    break;
+            }
+        };
+
+        engine.Start(new SenderSettings(host, options.Port, deviceId, options.KeepAlive, options.FramesPerPacket));
         if (!options.KeepAlive)
             Console.WriteLine("  提示：没有静音保活，Windows 没声音时会停止发包，Mac 端会显示断开。");
         Console.WriteLine("按 Ctrl+C 停止。");
 
-        capture.Start();
         var clock = Stopwatch.StartNew();
         long lastBytes = 0;
         while (!stopped.Wait(TimeSpan.FromSeconds(5)))
         {
-            long bytes = sender.BytesSent;
-            double kbps = (bytes - lastBytes) * 8 / 5.0 / 1000;
-            lastBytes = bytes;
-            Console.WriteLine($"[{clock.Elapsed:hh\\:mm\\:ss}] 已发送 {sender.PacketsSent} 包，{kbps:F0} kbps，发送失败 {sender.SendErrors} 次");
+            SenderSnapshot s = engine.Snapshot;
+            double kbps = (s.BytesSent - lastBytes) * 8 / 5.0 / 1000;
+            lastBytes = s.BytesSent;
+            Console.WriteLine($"[{clock.Elapsed:hh\\:mm\\:ss}] 已发送 {s.PacketsSent} 包，{kbps:F0} kbps，发送失败 {s.SendErrors} 次");
         }
-        capture.Stop();
-
-        if (failure is not null)
-        {
-            Console.Error.WriteLine($"采集中断：{failure.Message}（输出设备可能被拔掉或停用了）");
-            return 1;
-        }
+        engine.Stop();
         Console.WriteLine("已停止。");
         return 0;
-    }
-
-    private static void ListDevices(MMDeviceEnumerator enumerator)
-    {
-        string? defaultId = null;
-        try
-        {
-            defaultId = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia).ID;
-        }
-        catch (COMException)
-        {
-            // 没有默认设备
-        }
-        Console.WriteLine("输出设备（* 为当前默认设备）：");
-        foreach (MMDevice device in enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
-            Console.WriteLine($"  {(device.ID == defaultId ? "*" : " ")} {device.FriendlyName}");
-    }
-
-    private static MMDevice? FindDevice(MMDeviceEnumerator enumerator, string? filter)
-    {
-        if (string.IsNullOrWhiteSpace(filter))
-            return enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-        return enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
-            .FirstOrDefault(d => d.FriendlyName.Contains(filter, StringComparison.OrdinalIgnoreCase));
     }
 }

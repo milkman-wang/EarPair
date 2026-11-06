@@ -7,7 +7,7 @@ namespace EarPair.Sender;
 /// 把 WASAPI 采到的 PCM / 浮点数据转成立体声 16-bit。
 /// 多声道按 Windows 标准顺序（FL FR FC LFE BL BR SL SR）混成立体声，LFE 丢弃。
 /// </summary>
-internal sealed class PcmConverter
+public sealed class PcmConverter
 {
     private static readonly Guid SubtypePcm = new("00000001-0000-0010-8000-00aa00389b71");
     private static readonly Guid SubtypeIeeeFloat = new("00000003-0000-0010-8000-00aa00389b71");

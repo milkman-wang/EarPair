@@ -22,6 +22,7 @@ SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
 xcrun vtool -set-build-version macos "$MIN_OS" "$SDK_VERSION" -replace \
   -output "$APP/Contents/MacOS/EarPair" "$BIN_DIR/EarPair"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 codesign --force --sign "${SIGN_IDENTITY:--}" "$APP"
 
 echo "完成：$(pwd)/$APP"

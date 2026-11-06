@@ -5,7 +5,7 @@ namespace EarPair.Sender;
 /// <summary>
 /// 把连续的立体声 16-bit 帧切成固定长度的 EarPair v1 数据包。格式见 protocol/audio-packet.md。
 /// </summary>
-internal sealed class PacketEncoder
+public sealed class PacketEncoder
 {
     public const int HeaderSize = 32;
     private const byte Version = 1;

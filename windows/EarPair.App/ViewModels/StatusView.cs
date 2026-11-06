@@ -1,0 +1,183 @@
+using EarPair.App.Services;
+using EarPair.Sender;
+
+namespace EarPair.App.ViewModels;
+
+/// <summary>托盘图标：未发送 / 发送中 / 有问题</summary>
+public enum TrayGlyph { Idle, On, Warn }
+
+/// <summary>路线上的节点：正常 / 占位（虚线圆，还没连上）/ 变暗（暂时不在工作）</summary>
+public enum NodeLook { Normal, Placeholder, Dimmed }
+
+/// <summary>连线的线型，和 Mac 端同一套</summary>
+public enum LinkLook
+{
+    /// <summary>静止的点线：等待</summary>
+    Waiting,
+    /// <summary>向右流动的点线：正在连接</summary>
+    Connecting,
+    /// <summary>淡色实线：连着，没声音</summary>
+    Quiet,
+    /// <summary>实线加流动的光点，光点亮度跟着电平（没声音时看不见光点，和 Quiet 一样）</summary>
+    Flowing,
+    /// <summary>灰色实线：这一段没在用</summary>
+    Inactive,
+    /// <summary>黄色短划线，中间一个 ⚠：Mac 没有响应</summary>
+    Warning,
+    /// <summary>红色实线，中间一个 ✕：出错</summary>
+    Failed,
+}
+
+public enum NoticeKind { Informational, Warning, Error }
+
+/// <summary>提示条上按钮的动作</summary>
+public enum NoticeAction { None, SendAnyway, Retry, DismissPostMute }
+
+/// <summary>路线上的一个设备：图标、名字、样子；悬停提示放 IP、采集设备这类细节</summary>
+public sealed record NodeView(string Glyph, string Name, NodeLook Look = NodeLook.Normal, string? ToolTip = null,
+                              bool Muted = false);
+
+/// <summary>路线：这台电脑 → Mac（→ Mac 的输出设备）。Output 为 null 时只画两个节点。</summary>
+public sealed record PathView(NodeView Pc, LinkLook First, NodeView Mac, LinkLook Second, NodeView? Output);
+
+public sealed record NoticeView(string Text, NoticeKind Kind, NoticeAction Action = NoticeAction.None,
+                                string? ActionText = null, bool Closable = false);
+
+/// <summary>Path 为 null：还没选 Mac，主卡片显示发现列表。</summary>
+public sealed record StatusView(string Title, PathView? Path, NoticeView? Notice, TrayGlyph TrayGlyph, string TrayText)
+{
+    /// <summary>路线给屏幕阅读器的一句话（和 Mac 的 VoiceOver 文案一致）</summary>
+    public string PathDescription { get; init; } = "";
+}
+
+/// <summary>把引擎状态翻译成界面：标题、路线、提示条、托盘。对照定稿里 Windows 主卡片的状态表，从上往下取第一条。</summary>
+public static class StatusDescriber
+{
+    public const string DesktopGlyph = "";
+    public const string LaptopGlyph = "";
+    public const string MonitorGlyph = "";
+    public const string HeadphonesGlyph = "";
+    public const string SpeakersGlyph = "";
+
+    public static string PcGlyph(string? kind) => kind == "laptop" ? LaptopGlyph : DesktopGlyph;
+
+    /// <summary>Mac：台式机是显示器，笔记本或不知道是笔记本</summary>
+    public static string MacGlyph(string? kind) => kind == "desktop" ? MonitorGlyph : LaptopGlyph;
+
+    public static string OutputGlyph(string? transport) => transport switch
+    {
+        "bluetooth" or "headphones" => HeadphonesGlyph,
+        "hdmi" => MonitorGlyph,
+        _ => SpeakersGlyph,
+    };
+
+    public static StatusView Describe(SenderSnapshot s, bool switchOn, MacTarget? target, bool postMuteDismissed)
+    {
+        if (target is null)
+            return new StatusView("选择 Mac", null, null, TrayGlyph.Idle, "EarPair");
+
+        string mac = target.Name is { Length: > 0 } name ? name : target.Host;
+        StatusMessage? remote = s.Remote;
+        var pc = new NodeView(PcGlyph(HostIdentity.Kind), HostIdentity.Name, ToolTip: s.DeviceName);
+        var macNode = new NodeView(MacGlyph(remote?.Kind ?? target.Kind), mac, ToolTip: target.Host);
+        NodeView? Output(bool muted = false) => remote?.Output is { Length: > 0 } output
+            ? new NodeView(OutputGlyph(remote.Transport), output, Muted: muted)
+            : null;
+        PathView TwoNodes(LinkLook first, NodeView? pcNode = null, NodeView? macOverride = null) =>
+            new(pcNode ?? pc, first, macOverride ?? macNode, LinkLook.Inactive, null);
+
+        string title;
+        PathView path;
+        NoticeView? notice = null;
+        TrayGlyph glyph;
+
+        if (!switchOn || s.State == SenderState.Stopped)
+        {
+            title = "未发送";
+            path = TwoNodes(LinkLook.Waiting);
+            glyph = TrayGlyph.Idle;
+        }
+        else
+        {
+            switch (s.State)
+            {
+                case SenderState.Failed:
+                    title = "无法发送";
+                    path = TwoNodes(LinkLook.Failed);
+                    notice = new NoticeView(s.Error ?? "出错了", NoticeKind.Error, NoticeAction.Retry, "重试");
+                    glyph = TrayGlyph.Warn;
+                    break;
+                case SenderState.WaitingForDevice:
+                    title = "找不到声音来源";
+                    path = TwoNodes(LinkLook.Inactive, pc with { Look = NodeLook.Dimmed });
+                    glyph = TrayGlyph.Warn;
+                    break;
+                case SenderState.WaitingForMac when s.Health == RemoteHealth.Busy:
+                    title = "Mac 正忙";
+                    path = TwoNodes(LinkLook.Inactive);
+                    notice = new NoticeView($"正在播放 {remote?.BusyName ?? "另一台电脑"} 的声音", NoticeKind.Informational);
+                    glyph = TrayGlyph.Idle;
+                    break;
+                case SenderState.WaitingForMac when s.Fresh:
+                    title = "正在连接";
+                    path = TwoNodes(LinkLook.Connecting);
+                    glyph = TrayGlyph.On;
+                    break;
+                case SenderState.WaitingForMac:
+                    title = "等待 Mac";
+                    path = TwoNodes(LinkLook.Waiting, macOverride: macNode with { Look = NodeLook.Placeholder });
+                    notice = new NoticeView("Mac 可用后自动继续", NoticeKind.Informational, NoticeAction.SendAnyway, "仍然发送");
+                    glyph = TrayGlyph.Idle;
+                    break;
+                case SenderState.Sending when s.Health == RemoteHealth.NoResponse:
+                    title = "Mac 没有响应";
+                    path = TwoNodes(LinkLook.Warning);
+                    notice = new NoticeView(s.PortUnreachable ? "Mac 上的 EarPair 没有打开" : "连不上 Mac", NoticeKind.Warning);
+                    glyph = TrayGlyph.Warn;
+                    break;
+                case SenderState.Sending when remote is { IsPlaying: true, Muted: true }:
+                    title = "Mac 上已静音";
+                    path = new PathView(pc, LinkLook.Flowing, macNode, LinkLook.Inactive, Output(muted: true));
+                    glyph = TrayGlyph.On;
+                    break;
+                case SenderState.Sending when remote is { IsPlaying: true }:
+                    title = "正在播放";
+                    path = new PathView(pc, LinkLook.Flowing, macNode, LinkLook.Flowing, Output());
+                    glyph = TrayGlyph.On;
+                    break;
+                case SenderState.Sending when s.Health == RemoteHealth.Ok:
+                    // Mac 回了 STATUS，还在缓冲（或者还没开始收）
+                    title = "正在连接";
+                    path = new PathView(pc, LinkLook.Connecting, macNode, LinkLook.Inactive, Output());
+                    glyph = TrayGlyph.On;
+                    break;
+                case SenderState.Sending when s.Fresh:
+                    title = "正在连接";
+                    path = TwoNodes(LinkLook.Connecting);
+                    glyph = TrayGlyph.On;
+                    break;
+                case SenderState.Sending:
+                    // Mac 是 0.1 版，不回传：只知道在发，不知道 Mac 在放什么
+                    title = "正在发送";
+                    path = TwoNodes(LinkLook.Flowing);
+                    glyph = TrayGlyph.On;
+                    break;
+                default:
+                    title = "未发送";
+                    path = TwoNodes(LinkLook.Waiting);
+                    glyph = TrayGlyph.Idle;
+                    break;
+            }
+        }
+
+        if (notice is null && s.PostMuteFallback && !postMuteDismissed)
+        {
+            notice = new NoticeView("这个设备静音后采集不到声音，已恢复本机声音", NoticeKind.Informational,
+                                    NoticeAction.DismissPostMute, Closable: true);
+        }
+
+        string description = $"{title}：{path.Pc.Name} 到 {path.Mac.Name}" +
+                             (path.Output is { } o ? $"，再到 {o.Name}" : "");
+        return new StatusView(title, path, notice, glyph, $"EarPair\n{title} · {mac}") { PathDescription = description };
+    }
+}

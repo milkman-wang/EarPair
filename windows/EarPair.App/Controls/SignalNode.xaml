@@ -1,0 +1,31 @@
+<UserControl
+    x:Class="EarPair.App.Controls.SignalNode"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- 路线上的一个设备：64 的中性色圆盘 + 图标，下面是名字。占位时是虚线圆，变暗时 45% 不透明 -->
+  <StackPanel Spacing="8">
+    <Grid x:Name="Circle" Width="64" Height="64" HorizontalAlignment="Center">
+      <Grid.OpacityTransition>
+        <ScalarTransition Duration="0:0:0.25" />
+      </Grid.OpacityTransition>
+      <Ellipse x:Name="Disc" Fill="{ThemeResource ControlAltFillColorQuarternaryBrush}" />
+      <Ellipse x:Name="Ring" Visibility="Collapsed" StrokeThickness="1.5" StrokeDashArray="2,2"
+               Stroke="{ThemeResource ControlStrongStrokeColorDefaultBrush}" />
+      <FontIcon x:Name="Icon" FontSize="28" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+      <FontIcon x:Name="FaintIcon" FontSize="28" Visibility="Collapsed"
+                Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+      <Grid x:Name="Badge" Width="22" Height="22" Margin="0,0,-3,-3" Visibility="Collapsed"
+            HorizontalAlignment="Right" VerticalAlignment="Bottom">
+        <Ellipse Fill="{ThemeResource ControlStrongFillColorDefaultBrush}" StrokeThickness="2"
+                 Stroke="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
+        <FontIcon Glyph="&#xE74F;" FontSize="11" Foreground="White" />
+      </Grid>
+    </Grid>
+    <TextBlock x:Name="NameText" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxLines="2"
+               TextTrimming="CharacterEllipsis" Style="{StaticResource BodyStrongTextBlockStyle}" />
+    <TextBlock x:Name="FaintNameText" Visibility="Collapsed" HorizontalAlignment="Center" TextAlignment="Center"
+               TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+               Style="{StaticResource BodyStrongTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+  </StackPanel>
+</UserControl>

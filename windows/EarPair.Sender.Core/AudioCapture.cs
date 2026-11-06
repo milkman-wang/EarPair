@@ -6,12 +6,14 @@ namespace EarPair.Sender;
 /// <summary>
 /// 用 WASAPI loopback 采集一个输出设备正在播放的声音，统一转成立体声 16-bit 交错 PCM。
 /// </summary>
-internal sealed class AudioCapture : IDisposable
+public sealed class AudioCapture : IDisposable
 {
     private readonly WasapiLoopbackCapture _capture;
     private readonly WasapiOut? _keepAlive;
     private readonly PcmConverter _converter;
+    private readonly object _gate = new();
     private short[] _stereo = Array.Empty<short>();
+    private bool _stopped;
 
     /// <summary>每次采到数据时触发（在采集线程上）：交错立体声样本缓冲、本次的帧数。</summary>
     public event Action<short[], int>? FramesCaptured;
@@ -51,19 +53,28 @@ internal sealed class AudioCapture : IDisposable
         _capture.StartRecording();
     }
 
+    /// <summary>
+    /// 停止采集。返回之后不会再触发 FramesCaptured（NAudio 的 StopRecording 是异步的，采集线程还可能再交一批数据）：
+    /// 引擎停采集之后才发 BYE，BYE 后面不会再跟着音频包。
+    /// </summary>
     public void Stop()
     {
+        lock (_gate) _stopped = true;
         _capture.StopRecording();
         _keepAlive?.Stop();
     }
 
     private void OnDataAvailable(object? sender, WaveInEventArgs e)
     {
-        int frames = _converter.FrameCount(e.BytesRecorded);
-        if (frames == 0) return;
-        if (_stereo.Length < frames * 2) _stereo = new short[frames * 2];
-        _converter.ConvertToStereo16(e.Buffer.AsSpan(0, e.BytesRecorded), _stereo);
-        FramesCaptured?.Invoke(_stereo, frames);
+        lock (_gate)
+        {
+            if (_stopped) return;
+            int frames = _converter.FrameCount(e.BytesRecorded);
+            if (frames == 0) return;
+            if (_stereo.Length < frames * 2) _stereo = new short[frames * 2];
+            _converter.ConvertToStereo16(e.Buffer.AsSpan(0, e.BytesRecorded), _stereo);
+            FramesCaptured?.Invoke(_stereo, frames);
+        }
     }
 
     public void Dispose()

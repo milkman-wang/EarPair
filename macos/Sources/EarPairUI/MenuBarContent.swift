@@ -2,7 +2,8 @@ import AppKit
 import EarPairCore
 import SwiftUI
 
-/// 菜单栏弹出面板：状态、音量、音量平衡。其余设置在主窗口里。
+/// 菜单栏弹出面板：路线（Windows → 耳机）、地址或错误、音量、静音和音量平衡两个开关、打开窗口 / 退出。
+/// 样式参照系统的 Wi-Fi、蓝牙、声音菜单：平铺、分隔线分组、最下面是菜单项。
 public struct MenuBarContent: View {
     @ObservedObject var controller: ReceiverController
     @Environment(\.openWindow) private var openWindow
@@ -11,48 +12,37 @@ public struct MenuBarContent: View {
         self.controller = controller
     }
 
-    private var stats: ReceiverStats { controller.stats }
-
     public var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            header
-            if let message = controller.errorMessage {
-                Text(verbatim: message)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(spacing: 0) {
+            RouteView(nodes: [controller.senderNode, controller.outputNode], links: [controller.panelLink],
+                      metrics: .panel)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(controller.routeAccessibilityLabel)
+                .padding(.top, 18)
+            if let message = controller.failureMessage {
+                ErrorRow(message: message).padding(.top, 16)
+            } else if controller.linkState == .waiting {
+                AddressRows(addresses: controller.localAddresses, centered: false).padding(.top, 16)
             }
-            if !stats.isStreaming {
-                ForEach(controller.localAddresses, id: \.self) { local in
-                    AddressRow(address: local.address)
-                }
+            VolumeRow(controller: controller, style: .panel).padding(.top, 14)
+            HStack(spacing: 8) {
+                ToggleTile(title: "静音", systemImage: "speaker.slash.fill", isOn: $controller.muted)
+                ToggleTile(title: "音量平衡", systemImage: "wand.and.stars", isOn: $controller.autoLevel)
             }
-            VolumeControl(controller: controller, showsMute: true, showsMeter: true)
-            GlassToggleTile(title: "音量平衡", systemImage: "wand.and.stars", isOn: $controller.autoLevel)
+            .padding(.top, 12)
+            Divider().padding(.vertical, 8)
+            MenuRow(title: "打开 EarPair") {
+                NSApp.activate()
+                openWindow(id: MainWindow.id)
+            }
+            MenuRow(title: "退出 EarPair", shortcut: "⌘Q") {
+                NSApplication.shared.terminate(nil)
+            }
+            .keyboardShortcut("q")
         }
-        .padding(16)
+        .padding(.horizontal, 14)
+        .padding(.bottom, 8)
         .frame(width: 300)
-    }
-
-    private var header: some View {
-        HStack(spacing: 8) {
-            StatusDot(color: stats.statusColor)
-            Text(verbatim: stats.statusTitle)
-                .font(.headline)
-                .lineLimit(1)
-            if stats.state == .buffering {
-                ProgressView().controlSize(.mini)
-            }
-            Spacer(minLength: 8)
-            HStack(spacing: 12) {
-                IconButton(systemImage: "macwindow", help: "打开 EarPair") {
-                    NSApp.activate()
-                    openWindow(id: MainWindow.id)
-                }
-                IconButton(systemImage: "power", help: "退出 EarPair") {
-                    NSApplication.shared.terminate(nil)
-                }
-            }
-        }
+        .animation(.smooth(duration: 0.3), value: controller.linkState)
     }
 }

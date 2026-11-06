@@ -1,0 +1,24 @@
+<UserControl
+    x:Class="EarPair.App.Controls.SignalPath"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:EarPair.App.Controls">
+
+  <Grid>
+    <!-- 合成层的画刷不认 ThemeResource：用这几个看不见的元素取“这个控件当前主题下”的颜色 -->
+    <Border x:Name="AccentProbe" Visibility="Collapsed" Background="{ThemeResource AccentFillColorDefaultBrush}" />
+    <Border x:Name="SecondaryProbe" Visibility="Collapsed" Background="{ThemeResource TextFillColorSecondaryBrush}" />
+    <Border x:Name="TertiaryProbe" Visibility="Collapsed" Background="{ThemeResource TextFillColorTertiaryBrush}" />
+    <Border x:Name="InactiveProbe" Visibility="Collapsed" Background="{ThemeResource ControlStrongStrokeColorDisabledBrush}" />
+    <Border x:Name="CautionProbe" Visibility="Collapsed" Background="{ThemeResource SystemFillColorCautionBrush}" />
+    <Border x:Name="CriticalProbe" Visibility="Collapsed" Background="{ThemeResource SystemFillColorCriticalBrush}" />
+
+    <local:SignalLayout x:Name="Layout">
+      <local:SignalNode x:Name="PcNode" />
+      <local:SignalLink x:Name="FirstLink" />
+      <local:SignalNode x:Name="MacNode" />
+      <local:SignalLink x:Name="SecondLink" />
+      <local:SignalNode x:Name="OutputNode" />
+    </local:SignalLayout>
+  </Grid>
+</UserControl>

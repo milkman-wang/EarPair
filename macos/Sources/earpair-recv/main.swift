@@ -76,12 +76,12 @@ func format(_ value: Double, _ digits: Int = 1) -> String {
 func describe(_ s: ReceiverStats, kbps: Double) -> String {
     let state: String
     switch s.state {
-    case .idle: state = "等待"
+    case .idle: state = s.endedBySender ? "已停止" : "等待"
     case .buffering: state = "缓冲"
     case .playing: state = "播放"
     }
     return "[\(state)] 收 \(s.packetsReceived) 丢 \(s.packetsLost)(\(format(s.lossPercent, 2))%) "
-        + "迟到 \(s.packetsLate) 欠载 \(s.underruns) 裁剪 \(s.latencyTrims) | "
+        + "迟到 \(s.packetsLate) 忽略 \(s.packetsIgnored) 欠载 \(s.underruns) 裁剪 \(s.latencyTrims) | "
         + "缓冲 \(format(s.bufferedMs))/\(format(s.targetMs, 0)) ms | "
         + "漂移 \(String(format: "%+.0f", s.driftPPM)) ppm | 抖动 \(format(s.jitterMs)) ms | \(format(kbps, 0)) kbps"
 }
@@ -121,10 +121,31 @@ if options.nullOutput {
     audioOutput = output
 }
 
+/// 控制包回 STATUS 要用到接收器：用一个弱引用盒子接起来
+final class ReceiverBox: @unchecked Sendable {
+    weak var receiver: UDPReceiver?
+}
+
+let receiverBox = ReceiverBox()
+let receiverID = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+let responder = ControlResponder(
+    core: core,
+    info: ControlResponder.LocalInfo(id: receiverID, name: HostInfo.computerName, kind: HostInfo.kind.rawValue,
+                                     app: "0.2.0",
+                                     output: options.nullOutput ? nil : OutputDevice.current()?.name,
+                                     transport: options.nullOutput ? nil : OutputDevice.current()?.protocolTransport)
+) { data, endpoint in
+    receiverBox.receiver?.send(data, to: endpoint)
+}
 let receiver = UDPReceiver(
     port: options.port,
     onPacket: { bytes, sender, now in core.ingest(bytes, from: sender, at: now) },
-    onTick: { now in core.housekeeping(now: now) })
+    onControl: { bytes, sender, now in responder.handle(bytes, from: sender, now: now) },
+    onTick: { now in
+        core.housekeeping(now: now)
+        responder.tick(now: now)
+    })
+receiverBox.receiver = receiver
 do {
     try receiver.start()
 } catch {
@@ -132,7 +153,11 @@ do {
     exit(1)
 }
 
-print("EarPair 接收端 0.1：在 UDP \(options.port) 端口等待发送端…")
+// 在局域网里广播，Windows 端可以自动找到这台 Mac
+let advertiser = ServiceAdvertiser()
+advertiser.start(port: options.port, id: receiverID, kind: HostInfo.kind)
+
+print("EarPair 接收端 0.2：在 UDP \(options.port) 端口等待发送端…")
 let addresses = NetworkInfo.localIPv4Addresses()
 if !addresses.isEmpty { print("本机局域网地址：\(addresses.joined(separator: "、"))") }
 print(options.nullOutput ? "（--null-output：不会出声）" : "声音从系统当前的输出设备播放。按 Ctrl+C 退出。")

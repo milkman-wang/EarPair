@@ -1,0 +1,19 @@
+<Application x:Class="EarPair.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+      </ResourceDictionary.MergedDictionaries>
+
+      <!-- 开关旁边不写“开/关”，看开关本身。模板里开关右边留了 12px 给文字，负边距收回去，开关贴住右边。 -->
+      <Style TargetType="ToggleSwitch" BasedOn="{StaticResource DefaultToggleSwitchStyle}">
+        <Setter Property="OnContent" Value="" />
+        <Setter Property="OffContent" Value="" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="Margin" Value="0,0,-12,0" />
+      </Style>
+    </ResourceDictionary>
+  </Application.Resources>
+</Application>
