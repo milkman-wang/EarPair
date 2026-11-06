@@ -1,6 +1,7 @@
-# Builds the Windows packages and the Mac app and publishes a GitHub release.
-# Runs when a version tag (v0.2.0, ...) is pushed; can also be started by hand for an existing tag,
-# with publish unchecked to only build.
+# Builds the Windows installers and the Mac app and publishes a GitHub release.
+# Runs when a version tag (v0.2.0, ...) is pushed; can also be started by hand for an existing tag.
+# Started by hand with publish unchecked, it only builds the selected branch, for trying changes
+# to the packaging (the tag then only names the version the files should have).
 # Release notes come from .github/release-notes/<tag>.md when that file exists.
 name: Release
 
@@ -13,7 +14,7 @@ on:
         description: Existing tag to build and publish, for example v0.2.0
         required: true
       publish:
-        description: Publish the release (unchecked = only build)
+        description: Publish the release (unchecked = only build the selected branch)
         type: boolean
         default: true
 
@@ -26,6 +27,8 @@ concurrency:
 
 env:
   TAG: ${{ github.event.inputs.tag || github.ref_name }}
+  # What to build: the tag, or the selected branch for a build-only run
+  SOURCE: ${{ (github.event_name == 'workflow_dispatch' && !inputs.publish) && github.sha || github.event.inputs.tag || github.ref_name }}
 
 jobs:
   windows:
@@ -34,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ env.SOURCE }}
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -51,7 +54,7 @@ jobs:
         shell: pwsh
         run: |
           $version = $env:TAG.TrimStart('v')
-          $expected = foreach ($rid in 'win-x64', 'win-arm64') { "EarPair-$version-$rid.zip"; "EarPair.Sender-$version-$rid.exe" }
+          $expected = foreach ($rid in 'win-x64', 'win-arm64') { "EarPair-$version-$rid-setup.exe" }
           $missing = $expected | Where-Object { -not (Test-Path (Join-Path dist $_)) }
           if ($missing) { throw "Missing in dist: $($missing -join ', '). Does the tag match the app version in the .csproj files?" }
           Get-ChildItem dist | Format-Table Name, Length
@@ -68,7 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ env.SOURCE }}
 
       - name: Toolchain
         run: |

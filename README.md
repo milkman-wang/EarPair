@@ -51,24 +51,18 @@ Both apps are in English and Simplified Chinese, following the system language.
 
 ## Getting started
 
-1. **On the Mac,** build and open EarPair (needs Xcode 26 or later, which runs on macOS 15.6 or later):
+1. **On the Mac,** download `EarPair-0.2.0-macos-universal.dmg` from [Releases](https://github.com/milkman-wang/EarPair/releases/latest), open it, drag EarPair to Applications and open it from there.
 
-   ```bash
-   git clone https://github.com/milkman-wang/EarPair.git
-   cd EarPair/macos && ./scripts/build-app.sh
-   open build/EarPair.app
-   ```
+   EarPair's window opens and an ear appears in the menu bar; closing the window keeps EarPair running there. When macOS asks whether EarPair may find devices on your local network, click **Allow**: that's how the PC finds the Mac. Allow notifications as well, so you know when a PC connects or drops off.
 
-   EarPair's window opens and an ear appears in the menu bar; closing the window keeps EarPair running there. When macOS asks whether EarPair may find devices on your local network, click **Allow**: that's how the PC finds the Mac. Allow notifications as well, so you know when a PC connects or drops off. Move `build/EarPair.app` to Applications to keep it.
-
-2. **On the PC,** download `EarPair-0.2.0-win-x64.zip` (`win-arm64` for Arm PCs) from [Releases](https://github.com/milkman-wang/EarPair/releases/latest), unzip it anywhere and run `EarPair\EarPair.exe`.
+2. **On the PC,** download `EarPair-0.2.0-win-x64-setup.exe` (`win-arm64` for Arm PCs) from [Releases](https://github.com/milkman-wang/EarPair/releases/latest) and run it. EarPair opens when setup finishes.
 
 3. **Click your Mac** in the list. The PC's sound now plays on the Mac, and the PC's speakers stay quiet until you stop.
 
 Closing the window keeps EarPair running in the notification area (Windows 11 may tuck the icon under **^**). Turn on **Start at login** to have it ready after a restart.
 
 > [!NOTE]
-> EarPair isn't code-signed yet. The first time you run it, Windows may show **Windows protected your PC**: click **More info → Run anyway**. On the Mac, each rebuild counts as a new app, so macOS asks for local network access again.
+> EarPair isn't code-signed yet. The first time you run setup, Windows may show **Windows protected your PC**: click **More info → Run anyway**. On the Mac, if macOS says it can't verify EarPair, open **System Settings → Privacy & Security** and click **Open Anyway**. Each new version of the Mac app asks for local network access again.
 
 ## Good to know
 
@@ -76,7 +70,7 @@ Closing the window keeps EarPair running in the notification area (Windows 11 ma
 - **Use it on networks you trust.** Audio isn't encrypted yet, and anything on the network can send to your Mac.
 - **The PC stays awake while sending.** Sending pauses by itself when the Mac goes away and resumes when it's back.
 - **Set the volume on the Mac.** The PC's own volume doesn't change what you hear, and the Windows volume keys unmute the PC's speakers; switch sending off and on to mute them again.
-- **To remove EarPair from the PC,** turn off **Start at login** first, then delete the folder.
+- **To remove EarPair from the PC,** uninstall it in Windows **Settings → Apps**.
 
 ## Troubleshooting
 
@@ -85,19 +79,9 @@ Closing the window keeps EarPair running in the notification area (Windows 11 ma
 | The PC doesn't list your Mac | Use the same network on both (not a guest network that keeps devices apart), set the Windows network profile to **Private network**, and turn off any VPN. On the Mac, check **System Settings → Privacy & Security → Local Network**. You can also click **Enter address** and type the Mac's IP, shown in the Mac's menu bar panel. |
 | No ear in the Mac's menu bar | On macOS 26 and later, open **System Settings → Menu Bar** and turn on EarPair under **Allow in the Menu Bar**. |
 | No notifications on the Mac | Open **System Settings → Notifications → EarPair** and turn on **Allow Notifications**. |
-| It stopped working after rebuilding the Mac app | Allow local network access for EarPair again, as above. |
+| It stopped working after updating the Mac app | Allow local network access for EarPair again, as above. |
 | The PC's speakers are playing again | The Windows volume keys unmuted them. Switch sending off and on. |
 | Something else | On Windows, open **⋯ → Open log folder** and look at the latest log. |
-
-## Command-line sender
-
-Prefer a terminal on the PC? The command-line sender is a single file, also on the Releases page:
-
-```powershell
-.\EarPair.Sender-0.2.0-win-x64.exe 192.168.1.20
-```
-
-It doesn't look for Macs or mute the PC. Run it with `--help` to see the options.
 
 ## How it works
 
@@ -106,7 +90,7 @@ The Windows app captures what the PC is playing and streams it to the Mac as unc
 ## Building from source
 
 - **Mac:** `macos/scripts/build-app.sh` with Xcode 26 or later.
-- **Windows:** `powershell -ExecutionPolicy Bypass -File windows\build.ps1` with the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). No Visual Studio needed; the zips land in `dist\`.
+- **Windows:** `powershell -ExecutionPolicy Bypass -File windows\build.ps1` with the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). No Visual Studio needed. The installers land in `dist\` (with [Inno Setup 6](https://jrsoftware.org/isinfo.php); zips without it).
 
 Tests, tools and the project layout are in [docs/development.md](docs/development.md).
 

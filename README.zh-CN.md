@@ -51,24 +51,18 @@ AirPods 一直连着 Mac。EarPair 把 Windows 电脑的声音经局域网送到
 
 ## 开始使用
 
-1. **在 Mac 上**构建并打开 EarPair（需要 Xcode 26 或以上，它要求 macOS 15.6 或以上）：
+1. **在 Mac 上**从 [Releases](https://github.com/milkman-wang/EarPair/releases/latest) 下载 `EarPair-0.2.0-macos-universal.dmg`，打开后把 EarPair 拖进“应用程序”，再从那里打开它。
 
-   ```bash
-   git clone https://github.com/milkman-wang/EarPair.git
-   cd EarPair/macos && ./scripts/build-app.sh
-   open build/EarPair.app
-   ```
+   EarPair 的窗口会打开，菜单栏里也会出现一个耳朵图标；关掉窗口后 EarPair 继续在菜单栏里运行。macOS 询问是否允许 EarPair 查找本地网络上的设备时，点 **允许**：电脑就是靠这个找到 Mac 的。通知也请允许，这样电脑连上、断开时你都会知道。
 
-   EarPair 的窗口会打开，菜单栏里也会出现一个耳朵图标；关掉窗口后 EarPair 继续在菜单栏里运行。macOS 询问是否允许 EarPair 查找本地网络上的设备时，点 **允许**：电脑就是靠这个找到 Mac 的。通知也请允许，这样电脑连上、断开时你都会知道。想长期使用，把 `build/EarPair.app` 移到“应用程序”文件夹。
-
-2. **在电脑上**从 [Releases](https://github.com/milkman-wang/EarPair/releases/latest) 下载 `EarPair-0.2.0-win-x64.zip`（Arm 电脑用 `win-arm64`），解压到任意位置，运行 `EarPair\EarPair.exe`。
+2. **在电脑上**从 [Releases](https://github.com/milkman-wang/EarPair/releases/latest) 下载 `EarPair-0.2.0-win-x64-setup.exe`（Arm 电脑用 `win-arm64`）并运行，装好后 EarPair 会自动打开。
 
 3. **点一下你的 Mac**。电脑的声音就从 Mac 播放了，电脑自己的扬声器在你停止之前一直保持静音。
 
 关掉窗口后，EarPair 会留在通知区域继续运行（Windows 11 可能把图标收在 **^** 里）。打开 **开机时启动**，重启后就不用再手动打开。
 
 > [!NOTE]
-> EarPair 还没有代码签名。第一次运行时 Windows 可能提示 **Windows 已保护你的电脑**：点 **更多信息 → 仍要运行**。在 Mac 上，每次重新构建都算一个新 App，macOS 会再次询问本地网络权限。
+> EarPair 还没有代码签名。第一次运行安装程序时 Windows 可能提示 **Windows 已保护你的电脑**：点 **更多信息 → 仍要运行**。在 Mac 上，如果 macOS 提示无法验证 EarPair，打开 **系统设置 → 隐私与安全**，点 **仍要打开**。Mac 版每个新版本都会再次询问本地网络权限。
 
 ## 使用须知
 
@@ -76,7 +70,7 @@ AirPods 一直连着 Mac。EarPair 把 Windows 电脑的声音经局域网送到
 - **只在信任的网络里使用。** 声音还没有加密，同一网络里的设备都能往你的 Mac 发声音。
 - **发送期间电脑不会自动睡眠。** Mac 不在时会自动暂停发送，回来后自动继续。
 - **在 Mac 上调音量。** 电脑上的音量不影响你听到的声音，而且按 Windows 的音量键会取消电脑的静音；把发送关掉再打开即可重新静音。
-- **从电脑上删除 EarPair 之前**，先关掉 **开机时启动**，再删除文件夹。
+- **从电脑上删除 EarPair**：在 Windows 的 **设置 → 应用** 里卸载。
 
 ## 常见问题
 
@@ -85,19 +79,9 @@ AirPods 一直连着 Mac。EarPair 把 Windows 电脑的声音经局域网送到
 | 电脑上找不到 Mac | 两台电脑连同一个网络（不要用会隔离设备的访客网络），把 Windows 的网络设为 **专用网络**，关掉 VPN。在 Mac 上检查 **系统设置 → 隐私与安全 → 本地网络**。也可以点 **输入地址**，填 Mac 菜单栏面板里显示的 IP。 |
 | Mac 菜单栏里没有耳朵图标 | macOS 26 及以上：打开 **系统设置 → 菜单栏**，在 **允许在菜单栏显示** 里打开 EarPair。 |
 | Mac 上没有通知 | 在 **系统设置 → 通知 → EarPair** 里打开 **允许通知**。 |
-| 重新构建 Mac App 后用不了了 | 照上面的方法，再允许一次 EarPair 访问本地网络。 |
+| 更新 Mac App 后用不了了 | 照上面的方法，再允许一次 EarPair 访问本地网络。 |
 | 电脑的扬声器又响了 | 按了 Windows 的音量键。把发送关掉再打开。 |
 | 其他问题 | 在 Windows 上打开 **⋯ → 打开日志文件夹**，看最新的日志。 |
-
-## 命令行版
-
-习惯用终端？命令行版是单个文件，同样在 Releases 页面下载：
-
-```powershell
-.\EarPair.Sender-0.2.0-win-x64.exe 192.168.1.20
-```
-
-它不会自动找 Mac，也不会静音电脑。加 `--help` 查看全部参数。
 
 ## 工作原理
 
@@ -106,7 +90,7 @@ Windows 端采集电脑正在播放的声音，以不压缩的音频经 UDP 发�
 ## 从源码构建
 
 - **Mac**：`macos/scripts/build-app.sh`，需要 Xcode 26 或以上。
-- **Windows**：`powershell -ExecutionPolicy Bypass -File windows\build.ps1`，需要 [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)，不需要 Visual Studio；zip 在 `dist\` 里。
+- **Windows**：`powershell -ExecutionPolicy Bypass -File windows\build.ps1`，需要 [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)，不需要 Visual Studio。安装程序在 `dist\` 里（需要装 [Inno Setup 6](https://jrsoftware.org/isinfo.php)，没装时打 zip）。
 
 测试、工具和目录结构见 [docs/development.zh-CN.md](docs/development.zh-CN.md)。
 

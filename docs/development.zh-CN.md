@@ -42,10 +42,11 @@ macos/                      Swift Package（macOS 14+）
 windows/                    .NET 10
   EarPair.Sender.Core/      采集、格式转换、打包、UDP、控制包、本机静音
   EarPair.App/              WinUI 3 托盘 App（Windows App SDK 2.6，非打包、自包含）
-  EarPair.Sender/           命令行版
+  EarPair.Sender/           命令行版（不打包，从源码运行）
   EarPair.Sender.SelfTest/  自检（Mac 上也能跑）
   */Strings*.resx           界面文字：英文和简体中文
-  build.ps1                 打包 zip 和单文件 exe
+  installer/EarPair.iss     安装程序的 Inno Setup 脚本
+  build.ps1                 打包安装程序
 tools/                      测试发送端、录音分析、端到端测试、图标生成
 docs/                       本页、本地化说明和 README 用的图片
 ```
@@ -74,7 +75,7 @@ cd macos
 powershell -ExecutionPolicy Bypass -File windows\build.ps1
 ```
 
-产物在 `dist\`：`EarPair-<版本>-win-x64.zip`、`…-win-arm64.zip` 和命令行版单文件 exe。zip 里自带 .NET 运行时和 Windows App SDK。打包前脚本会检查发布目录（自带运行时、有 `.pri`、有简体中文翻译、没有混进 AI 组件），不对就报错。
+产物在 `dist\`：安装程序 `EarPair-<版本>-win-x64-setup.exe` 和 `…-win-arm64-setup.exe`；没装 [Inno Setup 6](https://jrsoftware.org/isinfo.php) 时改打 zip。都自带 .NET 运行时和 Windows App SDK。安装程序不需要管理员权限：只装给当前用户，装在 `%LOCALAPPDATA%\Programs\EarPair`，加开始菜单快捷方式和卸载程序；卸载时也会删掉开机启动项。打包前脚本会检查发布目录（自带运行时、有 `.pri`、有简体中文翻译、没有混进 AI 组件），不对就报错。
 
 ## 测试
 
@@ -119,7 +120,7 @@ python3 tools/test_sender.py 127.0.0.1 --clock-ppm 200 --jitter-ms 8 --loss 1 --
 
 ```
 earpair-recv [--port N] [--buffer-ms N] [--duration S] [--stats S] [--no-drift] [--null-output [--record PATH]]
-EarPair.Sender.exe <Mac 的 IP> [--port N] [--device "名称"] [--list-devices] [--frames N] [--no-keepalive]
+dotnet run --project windows/EarPair.Sender -- <Mac 的 IP> [--port N] [--device "名称"] [--list-devices] [--frames N] [--no-keepalive]
 ```
 
 命令行版不会自动发现 Mac，也不会静音本机。不加 `--device` 时跟随系统默认输出设备。

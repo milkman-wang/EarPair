@@ -1,7 +1,7 @@
 ﻿# 在 Windows 上打包 EarPair（需要 .NET 10 SDK，不需要 Visual Studio）。
-# 产物都自带 .NET 运行时和 Windows App SDK，复制到别的电脑解压就能用：
-#   dist\EarPair-<版本>-win-x64.zip          WinUI 界面版（解压后运行 EarPair\EarPair.exe）
-#   dist\EarPair.Sender-<版本>-win-x64.exe   命令行版（单个文件）
+# 产物自带 .NET 运行时和 Windows App SDK，别的电脑不用另装：
+#   dist\EarPair-<版本>-win-x64-setup.exe    安装程序（装了 Inno Setup 6 时；只装给当前用户，不需要管理员）
+#   dist\EarPair-<版本>-win-x64.zip          没有 Inno Setup 时打 zip（解压后运行 EarPair\EarPair.exe）
 # 用法：powershell -ExecutionPolicy Bypass -File windows\build.ps1 [-Runtimes win-x64,win-arm64] [-Out 目录]
 param(
     [string[]]$Runtimes = @('win-x64', 'win-arm64'),
@@ -20,7 +20,7 @@ $dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue).Source
 if (-not (Test-Sdk10 $dotnet)) { $dotnet = Join-Path $env:USERPROFILE '.dotnet\dotnet.exe' }
 if (-not (Test-Sdk10 $dotnet)) { throw '找不到 .NET 10 SDK，请先安装：https://dotnet.microsoft.com/download/dotnet/10.0' }
 
-# 打进 zip 之前检查发布目录：少了 pri 会启动就崩；必须自带运行时；不能混进 AI / ML 组件；
+# 打包之前检查发布目录：少了 pri 会启动就崩；必须自带运行时；不能混进 AI / ML 组件；
 # 中文界面的卫星程序集不能在清理语言目录时被删掉
 function Test-Publish([string]$dir) {
     $problems = @()
@@ -62,28 +62,39 @@ function New-Zip([string]$dir, [string]$zip) {
 }
 New-Item -ItemType Directory -Force $Out | Out-Null
 
+# Inno Setup 的编译器：PATH 里的，或者装在默认位置的（GitHub 的 Windows 构建机上有）
+$iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
+if (-not $iscc) {
+    $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+              "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+if (-not $iscc) { Write-Warning '没有找到 Inno Setup 6（ISCC.exe），只打 zip：https://jrsoftware.org/isdl.php' }
+
 foreach ($rid in $Runtimes) {
     $platform = if ($rid -eq 'win-arm64') { 'ARM64' } else { 'x64' }
     # zip 里带一层 EarPair\ 目录，解压时文件不会散一地
     $appDir = Join-Path $work "$rid\EarPair"
-    $cliDir = Join-Path $work "cli-$rid"
-    Remove-Item -Recurse -Force (Join-Path $work $rid), $cliDir -ErrorAction SilentlyContinue
+    Remove-Item -Recurse -Force (Join-Path $work $rid) -ErrorAction SilentlyContinue
 
     Write-Host "== $rid：界面版"
     & $dotnet publish (Join-Path $PSScriptRoot 'EarPair.App\EarPair.App.csproj') -c Release -r $rid "-p:Platform=$platform" -o $appDir
     if ($LASTEXITCODE -ne 0) { throw "界面版打包失败（$rid）" }
     Test-Publish $appDir
 
-    Write-Host "== $rid：命令行版"
-    & $dotnet publish (Join-Path $PSScriptRoot 'EarPair.Sender\EarPair.Sender.csproj') -c Release -r $rid -o $cliDir
-    if ($LASTEXITCODE -ne 0) { throw "命令行版打包失败（$rid）" }
-
-    $zip = Join-Path $Out "EarPair-$version-$rid.zip"
-    Remove-Item -Force $zip -ErrorAction SilentlyContinue
-    New-Zip $appDir $zip
-    Copy-Item (Join-Path $cliDir 'EarPair.Sender.exe') (Join-Path $Out "EarPair.Sender-$version-$rid.exe") -Force
+    if ($iscc) {
+        Write-Host "== $rid：安装程序"
+        $package = Join-Path $Out "EarPair-$version-$rid-setup.exe"
+        Remove-Item -Force $package -ErrorAction SilentlyContinue
+        & $iscc "/DAppVersion=$version" "/DArch=$rid" "/DSourceDir=$appDir" "/DOutputDir=$Out" (Join-Path $PSScriptRoot 'installer\EarPair.iss')
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $package)) { throw "安装程序打包失败（$rid）" }
+    }
+    else {
+        $package = Join-Path $Out "EarPair-$version-$rid.zip"
+        Remove-Item -Force $package -ErrorAction SilentlyContinue
+        New-Zip $appDir $package
+    }
 
     $appSize = (Get-ChildItem $appDir -Recurse -File | Measure-Object Length -Sum).Sum / 1MB
-    Write-Host ('   {0}：{1:N0} MB（解压后 {2:N0} MB）' -f (Split-Path -Leaf $zip), ((Get-Item $zip).Length / 1MB), $appSize)
+    Write-Host ('   {0}：{1:N0} MB（装好后 {2:N0} MB）' -f (Split-Path -Leaf $package), ((Get-Item $package).Length / 1MB), $appSize)
 }
 Write-Host "完成：$Out"
