@@ -112,7 +112,7 @@ struct VolumeSlider: View {
     }
 }
 
-/// 左右平衡：靠近中间吸附到 0；macOS 26+ 从中间开始填充、中间有刻度
+/// 左右平衡滑块：靠近中间吸附到 0；macOS 26+ 从中间开始填充、中间有刻度。两头的“左”“右”由 BalanceRow 放
 struct BalanceSlider: View {
     @Binding var balance: Double
     @State private var centered = true
@@ -130,21 +130,12 @@ struct BalanceSlider: View {
             if #available(macOS 26.0, *) {
                 Slider(value: snapping, in: -1...1, neutralValue: 0,
                        label: { Text("Balance", bundle: .module) },
-                       minimumValueLabel: { Text("Left", bundle: .module) },
-                       maximumValueLabel: { Text("Right", bundle: .module) },
                        ticks: { SliderTick(0.0) })
             } else {
-                Slider(value: snapping, in: -1...1) {
-                    Text("Balance", bundle: .module)
-                } minimumValueLabel: {
-                    Text("Left", bundle: .module)
-                } maximumValueLabel: {
-                    Text("Right", bundle: .module)
-                }
+                Slider(value: snapping, in: -1...1) { Text("Balance", bundle: .module) }
             }
         }
         .labelsHidden()
-        .foregroundStyle(.secondary)
         .sensoryFeedback(.alignment, trigger: centered) { _, new in new }
     }
 }

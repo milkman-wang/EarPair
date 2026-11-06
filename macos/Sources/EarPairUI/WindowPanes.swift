@@ -141,7 +141,7 @@ struct SoundPane: View {
                     Text("Volume", bundle: .module)
                 }
                 LabeledContent {
-                    BalanceSlider(balance: $controller.balance)
+                    BalanceRow(balance: $controller.balance)
                 } label: {
                     Text("Balance", bundle: .module)
                 }

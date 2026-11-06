@@ -89,6 +89,12 @@ struct CopyButton: View {
 
 // MARK: - 行
 
+/// 窗口里“音量”和“左右”两行滑块两侧的宽度：两行用同一套，滑块一样长、两头对齐
+enum SliderRowMetrics {
+    static let leading: CGFloat = 28
+    static let trailing: CGFloat = 44
+}
+
 /// 音量：窗口里是“静音按钮 + 滑块 + 百分比”；面板里喇叭只是图标（静音交给圆钮，和控制中心一样）
 struct VolumeRow: View {
     enum Style { case form, panel }
@@ -101,6 +107,7 @@ struct VolumeRow: View {
             switch style {
             case .form:
                 MuteButton(muted: $controller.muted, volume: controller.volume)
+                    .frame(width: SliderRowMetrics.leading)
             case .panel:
                 Image(systemName: speakerSymbol(volume: controller.volume, muted: controller.muted))
                     .foregroundStyle(.secondary)
@@ -111,8 +118,30 @@ struct VolumeRow: View {
             Text(verbatim: Format.percent(controller.volume))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
-                .frame(width: style == .panel ? 38 : 44, alignment: .trailing)
+                .frame(width: style == .panel ? 38 : SliderRowMetrics.trailing, alignment: .trailing)
         }
+    }
+}
+
+/// 左右平衡：两头的“左”“右”和音量那行的静音按钮、百分比占同样的宽度、用同样的字，
+/// 并且分别对准上面喇叭图标和“100%”的中线（左列都居中；右列用看不见的“100%”占位）
+struct BalanceRow: View {
+    @Binding var balance: Double
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("Left", bundle: .module)
+                .fixedSize()
+                .frame(width: SliderRowMetrics.leading)
+            BalanceSlider(balance: $balance)
+            ZStack {
+                Text(verbatim: Format.percent(1)).monospacedDigit().hidden()
+                Text("Right", bundle: .module).fixedSize()
+            }
+            .frame(width: SliderRowMetrics.trailing, alignment: .trailing)
+        }
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
     }
 }
 
