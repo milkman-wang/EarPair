@@ -1,5 +1,6 @@
-# Builds the Windows packages and publishes a GitHub release.
-# Runs when a version tag (v0.2.0, ...) is pushed; can also be started by hand for an existing tag.
+# Builds the Windows packages and the Mac app and publishes a GitHub release.
+# Runs when a version tag (v0.2.0, ...) is pushed; can also be started by hand for an existing tag,
+# with publish unchecked to only build.
 # Release notes come from .github/release-notes/<tag>.md when that file exists.
 name: Release
 
@@ -11,6 +12,10 @@ on:
       tag:
         description: Existing tag to build and publish, for example v0.2.0
         required: true
+      publish:
+        description: Publish the release (unchecked = only build)
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -57,9 +62,67 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  macos:
+    name: Build Mac app
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          echo "macOS SDK $(xcrun --sdk macosx --show-sdk-version)"
+
+      - name: Tests
+        run: swift test --package-path macos
+
+      - name: Package
+        run: |
+          version="${TAG#v}"
+          app_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' macos/Resources/Info.plist)"
+          if [ "$app_version" != "$version" ]; then
+            echo "macos/Resources/Info.plist says $app_version, the tag says $version"
+            exit 1
+          fi
+          macos/scripts/build-app.sh
+          app=macos/build/EarPair.app
+          archs="$(lipo -archs "$app/Contents/MacOS/EarPair")"
+          echo "Architectures: $archs"
+          case "$(echo $archs | tr ' ' '\n' | sort | tr '\n' ' ')" in
+            "arm64 ") platform=macos-arm64 ;;
+            "arm64 x86_64 ") platform=macos-universal ;;
+            *) echo "Unexpected architectures: $archs"; exit 1 ;;
+          esac
+          ls "$app/Contents/Resources/EarPair_EarPairUI.bundle/Contents/Resources/zh-Hans.lproj/Localizable.strings"
+          codesign --verify --deep --strict "$app"
+          # A dmg: open it and drag EarPair onto the Applications link next to it
+          stage="$RUNNER_TEMP/dmg"
+          mkdir -p "$stage" dist
+          ditto "$app" "$stage/EarPair.app"
+          ln -s /Applications "$stage/Applications"
+          dmg="dist/EarPair-$version-$platform.dmg"
+          # hdiutil sometimes reports "Resource busy" on GitHub Mac runners: retry
+          for attempt in 1 2 3 4 5; do
+            hdiutil create -volname EarPair -srcfolder "$stage" -fs HFS+ -format UDZO -ov "$dmg" && break
+            [ "$attempt" = 5 ] && exit 1
+            sleep 10
+          done
+          hdiutil verify "$dmg"
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-package
+          path: dist/*
+          if-no-files-found: error
+
   publish:
     name: Publish release
-    needs: windows
+    needs: [windows, macos]
+    if: github.event_name != 'workflow_dispatch' || inputs.publish
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +131,8 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: windows-packages
+          pattern: '*-package*'
+          merge-multiple: true
           path: dist
 
       - name: Create or update the release
