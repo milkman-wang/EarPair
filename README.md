@@ -72,7 +72,6 @@ Closing the window keeps EarPair running in the notification area (Windows 11 ma
 
 ## Good to know
 
-- **Latency is about 0.2–0.3 seconds**, AirPods included. Music and notification sounds are fine, but video played on the PC will be out of sync with the picture.
 - **The whole PC is captured,** not individual apps. Per-app capture is planned.
 - **Use it on networks you trust.** Audio isn't encrypted yet, and anything on the network can send to your Mac.
 - **The PC stays awake while sending.** Sending pauses by itself when the Mac goes away and resumes when it's back.
