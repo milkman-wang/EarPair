@@ -4,9 +4,10 @@ using NAudio.Wave;
 namespace EarPair.Sender;
 
 /// <summary>
-/// 用 WASAPI loopback 采集一个输出设备正在播放的声音，统一转成立体声 16-bit 交错 PCM。
+/// 设备 loopback：用 WASAPI loopback 采集一个输出设备正在播放的声音，统一转成立体声 16-bit 交错 PCM。
+/// 有的声卡把这个设备的静音和音量算在 loopback 之前（见 ProcessLoopbackCapture）。
 /// </summary>
-public sealed class AudioCapture : IDisposable
+public sealed class AudioCapture : ICapture
 {
     private readonly WasapiCapture _capture;
     private readonly WasapiOut? _keepAlive;

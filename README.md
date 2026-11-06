@@ -66,7 +66,7 @@ Closing the window keeps EarPair running in the notification area (Windows 11 ma
 
 ## Good to know
 
-- **The whole PC is captured,** not individual apps. Per-app capture is planned.
+- **Every app on the PC is captured** (EarPair itself excepted), whichever speakers it plays to. To send just one output device instead, pick it under **Sound source**. Per-app capture is planned.
 - **Use it on networks you trust.** Audio isn't encrypted yet, and anything on the network can send to your Mac.
 - **The PC stays awake while sending.** Sending pauses by itself when the Mac goes away and resumes when it's back.
 - **Set the volume on the Mac.** The PC's own volume doesn't change what you hear, and the Windows volume keys unmute the PC's speakers; switch sending off and on to mute them again.
@@ -85,7 +85,7 @@ Closing the window keeps EarPair running in the notification area (Windows 11 ma
 
 ## How it works
 
-The Windows app captures what the PC is playing and streams it to the Mac as uncompressed audio over UDP. The Mac keeps a short buffer, smooths over lost packets and the clock difference between the two machines, and plays the stream like any other app, so macOS mixes it with everything else. The two apps also swap names and status, which is how both can draw the whole route. Packet formats: [audio](protocol/audio-packet.md), [control](protocol/control-packet.md).
+The Windows app captures what the PC is playing and streams it to the Mac as uncompressed audio over UDP. It takes each app's sound before it reaches the speakers (Windows process loopback), so muting the PC or turning its volume down doesn't change what the Mac gets — on some sound cards, capturing the speakers' output instead goes silent as soon as they're muted. On older Windows 10, or when you pick a specific output device, it captures that device's output. The Mac keeps a short buffer, smooths over lost packets and the clock difference between the two machines, and plays the stream like any other app, so macOS mixes it with everything else. The two apps also swap names and status, which is how both can draw the whole route. Packet formats: [audio](protocol/audio-packet.md), [control](protocol/control-packet.md).
 
 ## Building from source
 

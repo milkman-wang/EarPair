@@ -64,10 +64,10 @@
     <value>{0}（{1}）</value>
   </data>
   <data name="SystemDefault" xml:space="preserve">
-    <value>系统默认</value>
+    <value>所有程序</value>
   </data>
   <data name="SystemDefaultDevice" xml:space="preserve">
-    <value>系统默认（{0}）</value>
+    <value>所有程序（默认输出：{0}）</value>
   </data>
 
   <data name="AddressDialogTitle" xml:space="preserve">

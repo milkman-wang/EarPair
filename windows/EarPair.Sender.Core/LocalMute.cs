@@ -4,9 +4,21 @@ using NAudio.CoreAudioApi;
 
 namespace EarPair.Sender;
 
+internal enum MuteResult
+{
+    /// <summary>我们静的音，停止时恢复</summary>
+    Muted,
+    /// <summary>原来就静着（用户自己静的），不归我们管</summary>
+    AlreadyMuted,
+    /// <summary>这次发送中用户取消过我们的静音，不再静</summary>
+    UserOverrode,
+    /// <summary>设置静音失败（设备没了等）</summary>
+    Failed,
+}
+
 /// <summary>
 /// 发送时让本机不出声：静音正在采集的输出设备，停止时恢复。只恢复我们自己静的；
-/// 用户中途自己取消了静音，就放手不再管。只在发送引擎的线程上使用。
+/// 用户中途自己取消了静音，就放手不再管。只在发送引擎的线程上使用（UserUnmuted 除外）。
 /// </summary>
 internal sealed class LocalMute : IDisposable
 {
@@ -16,30 +28,35 @@ internal sealed class LocalMute : IDisposable
     private volatile bool _userOverrode;
 
     public string DeviceId { get; }
+    public string DeviceName { get; }
     public bool MutedByUs => _mutedByUs;
+
+    /// <summary>我们静着的时候被取消了静音（用户点的，或者按了音量键）。在系统的通知线程上触发。</summary>
+    public event Action? UserUnmuted;
 
     public LocalMute(MMDevice device)
     {
         _device = device;
         DeviceId = device.ID;
+        DeviceName = device.FriendlyName;
         _device.AudioEndpointVolume.OnVolumeNotification += OnVolumeNotification;
     }
 
-    /// <summary>静音（原来没静音才算我们静的）。返回是否由我们静音了。</summary>
-    public bool Mute()
+    /// <summary>静音（原来没静音才算我们静的）。</summary>
+    public MuteResult Mute()
     {
-        if (_userOverrode) return false;
+        if (_userOverrode) return MuteResult.UserOverrode;
         try
         {
-            if (_device.AudioEndpointVolume.Mute) return false; // 用户自己静着的，不归我们管
+            if (_device.AudioEndpointVolume.Mute) return MuteResult.AlreadyMuted;
             _mutedByUs = true;
             _device.AudioEndpointVolume.Mute = true;
-            return true;
+            return MuteResult.Muted;
         }
         catch (COMException)
         {
             _mutedByUs = false;
-            return false;
+            return MuteResult.Failed;
         }
     }
 
@@ -88,6 +105,7 @@ internal sealed class LocalMute : IDisposable
         {
             _mutedByUs = false;
             _userOverrode = true;
+            UserUnmuted?.Invoke();
         }
     }
 
