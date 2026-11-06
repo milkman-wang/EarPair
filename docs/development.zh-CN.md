@@ -117,7 +117,7 @@ EarPair.Sender.exe <Mac 的 IP> [--port N] [--device "名称"] [--list-devices] 
 
 ## 日志
 
-- Mac：`log stream --level info --predicate 'subsystem == "app.earpair"'`（Bonjour、UDP 和通知）。
+- Mac：`log stream --level info --predicate 'subsystem == "app.earpair"'`（Bonjour、UDP、通知和“重新打开”事件）。
 - Windows：`%LOCALAPPDATA%\EarPair\logs`，保留 7 天。窗口里：**⋯ → 打开日志文件夹**。
 
 ## 已知限制

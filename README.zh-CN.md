@@ -56,7 +56,7 @@ AirPods 一直连着 Mac。EarPair 把 Windows 电脑的声音经局域网送到
    open build/EarPair.app
    ```
 
-   菜单栏会出现一个耳朵图标。macOS 询问是否允许 EarPair 查找本地网络上的设备时，点 **允许**：电脑就是靠这个找到 Mac 的。通知也请允许，这样电脑连上、断开时你都会知道。想长期使用，把 `build/EarPair.app` 移到“应用程序”文件夹。
+   EarPair 的窗口会打开，菜单栏里也会出现一个耳朵图标；关掉窗口后 EarPair 继续在菜单栏里运行。macOS 询问是否允许 EarPair 查找本地网络上的设备时，点 **允许**：电脑就是靠这个找到 Mac 的。通知也请允许，这样电脑连上、断开时你都会知道。想长期使用，把 `build/EarPair.app` 移到“应用程序”文件夹。
 
 2. **在电脑上**从 [Releases](https://github.com/milkman-wang/EarPair/releases/latest) 下载 `EarPair-0.2.0-win-x64.zip`（Arm 电脑用 `win-arm64`），解压到任意位置，运行 `EarPair\EarPair.exe`。
 

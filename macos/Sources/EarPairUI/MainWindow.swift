@@ -70,12 +70,64 @@ public struct MainWindow: View {
                 }
             }
             .navigationTitle(section.title)
+            .background { SidebarCollapseFix().frame(width: 0, height: 0) }
         }
         // 表单超过 1100 pt 宽以后，标签和数值之间全是空白：限制最大宽度（系统设置也是这样）
         .frame(minWidth: 760, idealWidth: 900, maxWidth: 1120, minHeight: 520, idealHeight: 640)
         // 窗口打开时出现在 Dock 和 ⌘Tab 里，关掉后回到只在菜单栏
-        .onAppear { NSApp.setActivationPolicy(.regular) }
-        .onDisappear { NSApp.setActivationPolicy(.accessory) }
+        .onAppear {
+            if NSApp.activationPolicy() != .regular { NSApp.setActivationPolicy(.regular) }
+            // 从“应用程序”冷启动时系统不会把只在菜单栏的 App 带到前台（那时还没有窗口）。窗口出来后还不在前台的话：
+            // 先把窗口放到最前面，别被别的窗口挡住（激活请求是异步的，也可能被拒），再请求激活
+            DispatchQueue.main.async {
+                guard !NSApp.isActive else { return }
+                NSApp.windows.first { $0.identifier?.rawValue == Self.id }?.orderFrontRegardless()
+                NSApp.activate()
+            }
+        }
+        .onDisappear {
+            if NSApp.activationPolicy() != .accessory { NSApp.setActivationPolicy(.accessory) }
+        }
+    }
+}
+
+/// 展开侧边栏时，系统默认的折叠方式（collapseBehavior = .default）会在动画里把右栏临时撑到
+/// “窗口宽 + 侧边栏宽”，动画结束再缩回去，看起来跳一下；侧边栏按钮这时也放不下，被挤进右上角的“»”里。
+/// 窗口宽到接近最大宽度时没有这个问题。改成按约束布局（.useConstraints）后两样都没有了，动画照旧（macOS 27.3 实测）。
+/// SwiftUI 没有这个接口：顺着视图往上找到分栏，改它的侧边栏项。SwiftUI 建好分栏后会把这个值设回默认，
+/// 所以盯着它，被改回去就再改过来。找不到分栏（SwiftUI 换了实现）就什么也不做。
+/// 只在 macOS 26 起的浮动侧边栏上改：问题只在那里出现，也只在那里实测过。
+struct SidebarCollapseFix: NSViewRepresentable {
+    func makeNSView(context: Context) -> Probe { Probe() }
+    func updateNSView(_ probe: Probe, context: Context) { probe.attach() }
+
+    final class Probe: NSView {
+        private weak var sidebar: NSSplitViewItem?
+        private var observation: NSKeyValueObservation?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            attach()
+        }
+
+        /// 只是个探针，不接收点击
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        func attach() {
+            guard #available(macOS 26, *), window != nil else { return }
+            var view = superview
+            while let current = view, !(current is NSSplitView) { view = current.superview }
+            guard let controller = (view as? NSSplitView)?.delegate as? NSSplitViewController,
+                  let item = controller.splitViewItems.first(where: { $0.behavior == .sidebar }),
+                  item !== sidebar else { return }
+            sidebar = item
+            item.collapseBehavior = .useConstraints
+            observation = item.observe(\.collapseBehavior) { item, _ in
+                MainActor.assumeIsolated {
+                    if item.collapseBehavior != .useConstraints { item.collapseBehavior = .useConstraints }
+                }
+            }
+        }
     }
 }
 

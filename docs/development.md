@@ -117,7 +117,7 @@ The command-line sender doesn't discover Macs and doesn't mute the PC's speakers
 
 ## Logs
 
-- Mac: `log stream --level info --predicate 'subsystem == "app.earpair"'` (Bonjour, UDP and notifications).
+- Mac: `log stream --level info --predicate 'subsystem == "app.earpair"'` (Bonjour, UDP, notifications and reopen events).
 - Windows: `%LOCALAPPDATA%\EarPair\logs`, kept for 7 days. In the window: **⋯ → 打开日志文件夹** (open log folder).
 
 ## Known limitations

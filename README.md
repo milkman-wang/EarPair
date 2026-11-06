@@ -58,7 +58,7 @@ The interface is in Simplified Chinese for now. Button names below are quoted as
    open build/EarPair.app
    ```
 
-   An ear appears in the menu bar. When macOS asks whether EarPair may find devices on your local network, click **Allow**: that's how the PC finds the Mac. Allow notifications as well, so you know when a PC connects or drops off. Move `build/EarPair.app` to Applications to keep it.
+   EarPair's window opens and an ear appears in the menu bar; closing the window keeps EarPair running there. When macOS asks whether EarPair may find devices on your local network, click **Allow**: that's how the PC finds the Mac. Allow notifications as well, so you know when a PC connects or drops off. Move `build/EarPair.app` to Applications to keep it.
 
 2. **On the PC,** download `EarPair-0.2.0-win-x64.zip` (`win-arm64` for Arm PCs) from [Releases](https://github.com/milkman-wang/EarPair/releases/latest), unzip it anywhere and run `EarPair\EarPair.exe`.
 

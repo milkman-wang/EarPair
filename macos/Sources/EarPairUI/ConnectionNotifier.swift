@@ -48,4 +48,10 @@ final class ConnectionNotifier: NSObject, UNUserNotificationCenterDelegate {
         -> UNNotificationPresentationOptions {
         [.banner, .list]
     }
+
+    /// 点通知：打开主窗口。系统随后也会发一次“重新打开”，但唤醒后那段时间的会被忽略，所以这里自己开
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                            didReceive response: UNNotificationResponse) async {
+        await MainActor.run { _ = MainWindowOpener.shared.show() }
+    }
 }
