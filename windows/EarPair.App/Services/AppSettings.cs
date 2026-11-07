@@ -40,6 +40,8 @@ public sealed class AppSettings
     public string? MutedByUs { get; set; }
     /// <summary>已经提示过“EarPair 在后台运行”</summary>
     public bool TrayHintShown { get; set; }
+    /// <summary>已经用通知区域气泡提示过的新版本（每个版本只提示一次）</summary>
+    public string? NotifiedUpdate { get; set; }
     public double WindowWidth { get; set; }
     public double WindowHeight { get; set; }
 

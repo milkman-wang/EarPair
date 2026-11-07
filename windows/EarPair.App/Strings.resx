@@ -162,6 +162,58 @@
     <comment>{3}：Mac 的输出设备</comment>
   </data>
 
+  <!-- 更新 -->
+  <data name="CheckForUpdates" xml:space="preserve">
+    <value>Check for updates</value>
+  </data>
+  <data name="CheckingForUpdates" xml:space="preserve">
+    <value>Checking for updates…</value>
+  </data>
+  <data name="UpdateAvailableTitle" xml:space="preserve">
+    <value>EarPair {0} is available</value>
+    <comment>{0}：新版本号</comment>
+  </data>
+  <data name="UpdateAvailableText" xml:space="preserve">
+    <value>EarPair closes while it updates and opens again when it's done</value>
+  </data>
+  <data name="UpdateNow" xml:space="preserve">
+    <value>Update</value>
+  </data>
+  <data name="UpdateDownloading" xml:space="preserve">
+    <value>Downloading EarPair {0}… {1}%</value>
+  </data>
+  <data name="UpdateInstalling" xml:space="preserve">
+    <value>Installing the update. EarPair will open again when it's done</value>
+  </data>
+  <data name="UpdateFailed" xml:space="preserve">
+    <value>Couldn't update: {0}</value>
+    <comment>{0}：原因</comment>
+  </data>
+  <data name="OpenDownloadPage" xml:space="preserve">
+    <value>Open download page</value>
+  </data>
+  <data name="UpToDate" xml:space="preserve">
+    <value>EarPair {0} is up to date</value>
+    <comment>{0}：当前版本号</comment>
+  </data>
+  <data name="UpdateCheckFailed" xml:space="preserve">
+    <value>Couldn't check for updates: {0}</value>
+  </data>
+  <data name="UpdateErrorBadFeed" xml:space="preserve">
+    <value>the release information couldn't be read</value>
+    <comment>接在“Couldn't check for updates: ”后面</comment>
+  </data>
+  <data name="UpdateErrorChecksum" xml:space="preserve">
+    <value>the download is incomplete or damaged</value>
+  </data>
+  <data name="UpdateErrorTimeout" xml:space="preserve">
+    <value>timed out</value>
+  </data>
+  <data name="NotChecked" xml:space="preserve">
+    <value>not checked</value>
+    <comment>日志里 SHA-256 的位置：发布信息里没有校验值</comment>
+  </data>
+
   <!-- 通知区域 -->
   <data name="TrayNoMac" xml:space="preserve">
     <value>No Mac chosen yet</value>
@@ -183,6 +235,15 @@
   </data>
   <data name="BackgroundText" xml:space="preserve">
     <value>Select the ear icon on the taskbar to open it again</value>
+  </data>
+  <data name="TrayUpdate" xml:space="preserve">
+    <value>Update to {0}</value>
+  </data>
+  <data name="UpdateBalloonTitle" xml:space="preserve">
+    <value>An EarPair update is available</value>
+  </data>
+  <data name="UpdateBalloonText" xml:space="preserve">
+    <value>Version {0} is out. Open EarPair to update</value>
   </data>
 
   <!-- 日志 -->
@@ -215,6 +276,31 @@
   </data>
   <data name="LogSessionEnding" xml:space="preserve">
     <value>Shutting down or signing out: stopping, restoring this PC's sound</value>
+  </data>
+  <data name="LogCloseRequested" xml:space="preserve">
+    <value>The installer asked EarPair to close</value>
+  </data>
+  <data name="LogUpToDate" xml:space="preserve">
+    <value>Checked for updates: running {0}, latest release {1}</value>
+  </data>
+  <data name="LogUpdateNoInstaller" xml:space="preserve">
+    <value>Release {0} has no {1} installer yet</value>
+    <comment>{1}：x64 或 arm64</comment>
+  </data>
+  <data name="LogUpdateAvailable" xml:space="preserve">
+    <value>Update available: {0} → {1}</value>
+  </data>
+  <data name="LogUpdateCheckFailed" xml:space="preserve">
+    <value>Couldn't check for updates: {0}</value>
+  </data>
+  <data name="LogUpdateDownloaded" xml:space="preserve">
+    <value>Downloaded {0} ({1} bytes, SHA-256 {2})</value>
+  </data>
+  <data name="LogUpdateInstalling" xml:space="preserve">
+    <value>Starting the installer for {0}, exiting</value>
+  </data>
+  <data name="LogUpdateFailed" xml:space="preserve">
+    <value>Update failed: {0}</value>
   </data>
   <data name="LogExit" xml:space="preserve">
     <value>Exiting</value>

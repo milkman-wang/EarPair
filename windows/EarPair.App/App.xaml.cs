@@ -24,6 +24,7 @@ public partial class App : Application
     private TrayIcon? _tray;
     private bool _refreshQueued;
     private bool _postMuteDismissed;
+    private bool _quitting;
 #if DEBUG
     private readonly Demo.Scene? _demo;
     private readonly ElementTheme _demoTheme;
@@ -32,6 +33,10 @@ public partial class App : Application
     public SenderEngine Engine { get; } = new();
     public AppSettings Settings { get; }
     public MacDiscovery Discovery { get; } = new();
+    public Updater Updater { get; } = new(VersionText.Parse(Version) ?? new Version(0, 0, 0));
+    private DispatcherQueueTimer? _updateTimer;
+    /// <summary>关掉的更新提示（状态 + 版本）：这次运行里同样的提示不再显示</summary>
+    private string? _updateBarDismissed;
 
     /// <summary>界面上的发送开关</summary>
     public bool SwitchOn { get; private set; }
@@ -96,6 +101,13 @@ public partial class App : Application
         _tray = new TrayIcon(Path.Combine(AppContext.BaseDirectory, "Assets")) { MenuProvider = TrayMenu };
         _tray.Activated += ShowMainWindow;
         _tray.SessionEnding += OnSessionEnding;
+        // 安装程序（覆盖安装、自动更新）要求关闭：处理完这条消息就退出（Quit 会停止发送、恢复本机声音）。
+        // 不马上退出的话，安装程序要等到超时，看起来像卡住了
+        _tray.CloseRequested += () =>
+        {
+            AppLog.Write(Strings.LogCloseRequested);
+            _dispatcher.TryEnqueue(Quit);
+        };
 
         Engine.Log += AppLog.Write;
         Engine.Changed += QueueRefresh;
@@ -115,6 +127,18 @@ public partial class App : Application
         Engine.RemoteSeen += status => _dispatcher.TryEnqueue(() => OnRemoteSeen(status));
         Discovery.Changed += () => _dispatcher.TryEnqueue(OnDiscoveryChanged);
         Discovery.Start();
+
+        // 启动 30 秒后检查一次更新（不和开机时的网络、发送抢），之后每 12 小时一次
+        Updater.Log += AppLog.Write;
+        Updater.Changed += () => _dispatcher.TryEnqueue(OnUpdaterChanged);
+        _updateTimer = _dispatcher.CreateTimer();
+        _updateTimer.Interval = TimeSpan.FromSeconds(30);
+        _updateTimer.Tick += (timer, _) =>
+        {
+            timer.Interval = TimeSpan.FromHours(12);
+            CheckForUpdates(manual: false);
+        };
+        _updateTimer.Start();
 
         // 上次退出时开关是开着的（比如开机自启）：继续发送
         if (Settings.Sending && Settings.Target is not null) StartSending();
@@ -281,6 +305,47 @@ public partial class App : Application
         Settings.Save();
     }
 
+    // MARK: - 更新
+
+    public void CheckForUpdates(bool manual)
+    {
+        if (manual) _updateBarDismissed = null;
+        _ = Updater.CheckAsync(manual);
+    }
+
+    /// <summary>下载并安装新版本：安装程序启动后 EarPair 退出（先停发送、恢复本机声音），装完安装程序会重新打开它</summary>
+    public async void InstallUpdate()
+    {
+        if (await Updater.DownloadAndInstallAsync()) Quit();
+    }
+
+    private string UpdateBarKey => $"{Updater.State}:{Updater.Latest?.Version}";
+
+    /// <summary>更新提示条被关掉了：同一个状态、同一个版本这次运行不再显示</summary>
+    public bool UpdateBarDismissed => _updateBarDismissed == UpdateBarKey;
+
+    public void DismissUpdateBar()
+    {
+        _updateBarDismissed = UpdateBarKey;
+        QueueRefresh();
+    }
+
+    private void OnUpdaterChanged()
+    {
+        // 发现新版本：每个版本用气泡提示一次（窗口关着时也能看到）
+        if (Updater.State == UpdateState.Available && Updater.Latest is { } latest)
+        {
+            string version = latest.Version.ToString(3);
+            if (Settings.NotifiedUpdate != version)
+            {
+                Settings.NotifiedUpdate = version;
+                Settings.Save();
+                _tray?.ShowBalloon(Strings.UpdateBalloonTitle, Strings.UpdateBalloonText(version));
+            }
+        }
+        QueueRefresh();
+    }
+
     // MARK: - 窗口
 
     public void ShowMainWindow()
@@ -317,6 +382,8 @@ public partial class App : Application
 
     public void Quit()
     {
+        if (_quitting) return;
+        _quitting = true;
         AppLog.Write(Strings.LogExit);
         Settings.Save();
         Discovery.Dispose();
@@ -324,6 +391,8 @@ public partial class App : Application
         Settings.MutedByUs = null;
         Settings.Save();
         _tray?.Dispose();
+        _updateTimer?.Stop();
+        Updater.Dispose();
         _window?.Close();
         Exit();
     }
@@ -370,8 +439,8 @@ public partial class App : Application
             _window?.ShowAddressDialog();
         }));
 
-        return
-        [
+        var items = new List<TrayIcon.MenuItem?>
+        {
             new TrayIcon.MenuItem(Settings.Target is null ? Strings.TrayNoMac : status.TrayText.Split('\n').Last(),
                                   IsEnabled: false),
             null,
@@ -385,8 +454,23 @@ public partial class App : Application
                 ApplySettings();
             }, IsChecked: Settings.MuteLocal),
             null,
-            new TrayIcon.MenuItem(Strings.OpenEarPair, ShowMainWindow, IsDefault: true),
-            new TrayIcon.MenuItem(Strings.Exit, Quit),
-        ];
+        };
+        // 有新版本：可以直接从通知区域更新
+        if (Updater.Latest is { } latest)
+        {
+            string version = latest.Version.ToString(3);
+            switch (Updater.State)
+            {
+                case UpdateState.Available or UpdateState.DownloadFailed:
+                    items.Add(new TrayIcon.MenuItem(Strings.TrayUpdate(version), InstallUpdate));
+                    break;
+                case UpdateState.Downloading:
+                    items.Add(new TrayIcon.MenuItem(Strings.UpdateDownloading(version, Updater.Percent), IsEnabled: false));
+                    break;
+            }
+        }
+        items.Add(new TrayIcon.MenuItem(Strings.OpenEarPair, ShowMainWindow, IsDefault: true));
+        items.Add(new TrayIcon.MenuItem(Strings.Exit, Quit));
+        return items;
     }
 }

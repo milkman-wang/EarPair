@@ -41,7 +41,9 @@ DisableReadyPage=yes
 ArchitecturesAllowed={#Architectures}
 ArchitecturesInstallIn64BitMode={#Architectures}
 MinVersion=10.0.19041
-; EarPair keeps running in the notification area after its window closes: close it before replacing files
+; EarPair keeps running in the notification area after its window closes. PrepareToInstall closes it
+; itself (quickly, and without the "applications are using files" page); the Restart Manager stays as a
+; fallback for anything else holding the files.
 CloseApplications=force
 RestartApplications=no
 SetupIconFile={#SourcePath}..\EarPair.App\Assets\EarPair.ico
@@ -80,6 +82,9 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupA
 
 [Run]
 Filename: "{app}\EarPair.exe"; Description: "{cm:LaunchProgram,EarPair}"; Flags: nowait postinstall skipifsilent
+; Silent installs (EarPair's own updater passes /SILENT /RELAUNCH=1) start EarPair again when it was
+; running before, so an update picks up where it left off
+Filename: "{app}\EarPair.exe"; Flags: nowait; Check: RelaunchAfterSilentInstall
 
 [Code]
 const
@@ -87,22 +92,52 @@ const
   WM_ENDSESSION = $0016;
   ENDSESSION_CLOSEAPP = 1;
 
-// EarPair keeps running in the notification area, and the uninstaller doesn't close programs by
-// itself. Ask it to quit the way Windows does at sign-out (it stops sending and unmutes the PC's
-// speakers), then end the process so its files can be removed.
+var
+  EarPairWasRunning: Boolean;
+
+// EarPair keeps running in the notification area. Ask it to quit the way the Restart Manager does:
+// it stops sending, unmutes the PC's speakers and exits (0.2.1 and earlier only stop and stay open).
+// Wait up to 3 seconds for its tray window to go, then end the process so its files can be replaced.
 procedure CloseEarPair();
 var
   Wnd: HWND;
-  ResultCode: Integer;
+  I, ResultCode: Integer;
 begin
   Wnd := FindWindowByClassName('EarPairTrayWindow');
   if Wnd = 0 then
     Exit;
+  Log('EarPair is running: asking it to close');
   SendMessage(Wnd, WM_QUERYENDSESSION, 0, ENDSESSION_CLOSEAPP);
   SendMessage(Wnd, WM_ENDSESSION, 1, ENDSESSION_CLOSEAPP);
+  for I := 1 to 30 do
+  begin
+    if FindWindowByClassName('EarPairTrayWindow') = 0 then
+      Break;
+    Sleep(100);
+  end;
+  if FindWindowByClassName('EarPairTrayWindow') = 0 then
+    Log('EarPair closed')
+  else
+    Log('EarPair is still running after 3 seconds');
+  // Also ends a process that is still on its way out, or a second copy
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM EarPair.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Log(Format('taskkill: %d', [ResultCode]));
   // Give Windows a moment to release the files
-  Sleep(1000);
+  Sleep(500);
+end;
+
+// Before the Restart Manager looks for programs using the files: close EarPair ourselves, so setup
+// neither shows the "close applications" page nor waits for EarPair to time out
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  EarPairWasRunning := FindWindowByClassName('EarPairTrayWindow') <> 0;
+  CloseEarPair();
+  Result := '';
+end;
+
+function RelaunchAfterSilentInstall(): Boolean;
+begin
+  Result := WizardSilent() and (EarPairWasRunning or (ExpandConstant('{param:relaunch|0}') = '1'));
 end;
 
 function InitializeUninstall(): Boolean;

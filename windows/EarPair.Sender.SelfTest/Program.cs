@@ -28,8 +28,64 @@ TestOptions();
 TestControlPacket();
 TestStrings();
 TestAddressPicker();
+TestReleaseInfo();
 Console.WriteLine(failures == 0 ? "全部通过" : $"{failures} 项没通过");
 return failures == 0 ? 0 : 1;
+
+// 自动更新：读 GitHub /releases/latest 的回答，挑这台电脑的安装包，比较版本号
+void TestReleaseInfo()
+{
+    Console.WriteLine("更新信息：");
+    // 按 GitHub 0.2.1 发布的真实回答删减（字段名、命名规则、digest 格式都一样）
+    const string latest = """
+        {
+          "html_url": "https://github.com/milkman-wang/EarPair/releases/tag/v0.2.1",
+          "tag_name": "v0.2.1", "name": "EarPair 0.2.1", "draft": false, "prerelease": false,
+          "assets": [
+            { "name": "EarPair-0.2.1-macos.dmg", "size": 2510843,
+              "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "browser_download_url": "https://github.com/milkman-wang/EarPair/releases/download/v0.2.1/EarPair-0.2.1-macos.dmg" },
+            { "name": "EarPair-0.2.1-win-arm64-setup.exe", "size": 61234567,
+              "digest": "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "browser_download_url": "https://github.com/milkman-wang/EarPair/releases/download/v0.2.1/EarPair-0.2.1-win-arm64-setup.exe" },
+            { "name": "EarPair-0.2.1-win-x64-setup.exe", "size": 63456789, "digest": null,
+              "browser_download_url": "https://github.com/milkman-wang/EarPair/releases/download/v0.2.1/EarPair-0.2.1-win-x64-setup.exe" }
+          ]
+        }
+        """;
+    ReleaseInfo? release = ReleaseInfo.Parse(latest);
+    Check(release is { Tag: "v0.2.1", PageUrl: "https://github.com/milkman-wang/EarPair/releases/tag/v0.2.1" } &&
+          release.Version == new Version(0, 2, 1) && release.Assets.Count == 3,
+          "读出版本号、发布页和三个文件");
+    Check(release?.SetupFor("arm64") is { Size: 61234567, Sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+          "arm64 安装包，SHA-256 去掉前缀、转小写");
+    Check(release?.SetupFor("x64") is { Name: "EarPair-0.2.1-win-x64-setup.exe", Sha256: null },
+          "x64 安装包；没有 digest（旧发布）时不校验");
+    Check(ReleaseInfo.Parse(latest.Replace("win-arm64", "win-arm64-portable"))?.SetupFor("arm64") is null,
+          "名字不完全对的文件不当安装包");
+
+    Check(ReleaseInfo.Parse(latest.Replace("\"prerelease\": false", "\"prerelease\": true")) is null, "预发布不算");
+    Check(ReleaseInfo.Parse(latest.Replace("\"draft\": false", "\"draft\": true")) is null, "草稿不算");
+    Check(ReleaseInfo.Parse("<html>rate limited</html>") is null && ReleaseInfo.Parse("[]") is null &&
+          ReleaseInfo.Parse("""{"tag_name": "nightly"}""") is null,
+          "不是 JSON、不是对象、版本号读不懂：返回 null，不抛异常");
+    Check(ReleaseInfo.Parse(latest.Replace("https://github.com/milkman-wang/EarPair/releases/tag", "file:///C:/Windows/System32"))
+              is { PageUrl: "" } &&
+          ReleaseInfo.Parse(latest.Replace("https://github.com/milkman-wang/EarPair/releases/download", "http://example.com"))
+              is { Assets.Count: 0 } &&
+          ReleaseInfo.IsWebUrl("http://127.0.0.1:8000/a.exe"),
+          "只认 https 地址（http 只认本机测试服务器）");
+
+    Check(VersionText.Parse("v0.2.1") == new Version(0, 2, 1) &&
+          VersionText.Parse("0.2.1+fd6dc07e1a") == new Version(0, 2, 1) &&
+          VersionText.Parse("1.0-beta.2") == new Version(1, 0, 0) &&
+          VersionText.Parse("0.2.1.0") == new Version(0, 2, 1) &&
+          VersionText.Parse("latest") is null && VersionText.Parse("1") is null,
+          "版本号：v 前缀、+提交号、-预发布后缀、三段或四段");
+    Check(VersionText.Parse("0.10.0") > VersionText.Parse("0.9.9") && VersionText.Parse("v0.2.1") > VersionText.Parse("0.2.0") &&
+          !(VersionText.Parse("0.2.1") > VersionText.Parse("0.2.1.0")),
+          "按数字比较版本号（0.10 比 0.9 新），0.2.1 和 0.2.1.0 一样");
+}
 
 // Mac 广播了好几个地址时 Windows 端挑哪个（MacDiscovery 用的就是 AddressPicker）
 void TestAddressPicker()
