@@ -118,6 +118,17 @@ public enum Updater {
         guard FileManager.default.createFile(atPath: file.path, contents: nil),
               let handle = try? FileHandle(forWritingTo: file) else { throw UpdateError.download("can’t write") }
         defer { try? handle.close() }
+        if release.dmg.isFileURL {
+            // 本机文件（测试、EARPAIR_UPDATE_FEED 指向的本地包）：直接读，不经过网络库
+            guard let data = try? Data(contentsOf: release.dmg) else { throw UpdateError.download("can’t read") }
+            try handle.write(contentsOf: data)
+            progress(1)
+            let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+            guard data.count == release.size, release.sha256.map({ $0 == digest }) ?? true else {
+                throw UpdateError.corrupted
+            }
+            return file
+        }
         let bytes: URLSession.AsyncBytes
         do {
             let (stream, response) = try await URLSession.shared.bytes(from: release.dmg)
