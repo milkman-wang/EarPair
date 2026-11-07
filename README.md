@@ -70,6 +70,7 @@ Closing the window keeps EarPair running in the notification area (Windows 11 ma
 - **Use it on networks you trust.** Audio isn't encrypted yet, and anything on the network can send to your Mac.
 - **The PC stays awake while sending.** Sending pauses by itself when the Mac goes away and resumes when it's back.
 - **Set the volume on the Mac.** The PC's own volume doesn't change what you hear, and the Windows volume keys unmute the PC's speakers; switch sending off and on to mute them again.
+- **The PC app updates itself.** Shortly after it starts, and twice a day after that, EarPair asks GitHub for the latest release (nothing else is sent). When there's a new version, the window and the notification area say so: click **Update** and EarPair downloads the installer, checks it, closes, updates and opens again. You can also check any time under **⋯ → Check for updates**. Running a newer setup by hand works too; it closes EarPair by itself.
 - **To remove EarPair from the PC,** uninstall it in Windows **Settings → Apps**.
 
 ## Troubleshooting

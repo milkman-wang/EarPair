@@ -65,6 +65,23 @@ public static class Strings
     public static string PathDescriptionWithOutput(string status, string pc, string mac, string output) =>
         Format(nameof(PathDescriptionWithOutput), status, pc, mac, output);
 
+    // 更新
+    public static string CheckForUpdates => Get(nameof(CheckForUpdates));
+    public static string CheckingForUpdates => Get(nameof(CheckingForUpdates));
+    public static string UpdateAvailableTitle(string version) => Format(nameof(UpdateAvailableTitle), version);
+    public static string UpdateAvailableText => Get(nameof(UpdateAvailableText));
+    public static string UpdateNow => Get(nameof(UpdateNow));
+    public static string UpdateDownloading(string version, int percent) => Format(nameof(UpdateDownloading), version, percent);
+    public static string UpdateInstalling => Get(nameof(UpdateInstalling));
+    public static string UpdateFailed(string reason) => Format(nameof(UpdateFailed), reason);
+    public static string OpenDownloadPage => Get(nameof(OpenDownloadPage));
+    public static string UpToDate(string version) => Format(nameof(UpToDate), version);
+    public static string UpdateCheckFailed(string reason) => Format(nameof(UpdateCheckFailed), reason);
+    public static string UpdateErrorBadFeed => Get(nameof(UpdateErrorBadFeed));
+    public static string UpdateErrorChecksum => Get(nameof(UpdateErrorChecksum));
+    public static string UpdateErrorTimeout => Get(nameof(UpdateErrorTimeout));
+    public static string NotChecked => Get(nameof(NotChecked));
+
     // 通知区域
     public static string TrayNoMac => Get(nameof(TrayNoMac));
     public static string StartSending => Get(nameof(StartSending));
@@ -73,6 +90,9 @@ public static class Strings
     public static string Exit => Get(nameof(Exit));
     public static string BackgroundTitle => Get(nameof(BackgroundTitle));
     public static string BackgroundText => Get(nameof(BackgroundText));
+    public static string TrayUpdate(string version) => Format(nameof(TrayUpdate), version);
+    public static string UpdateBalloonTitle => Get(nameof(UpdateBalloonTitle));
+    public static string UpdateBalloonText(string version) => Format(nameof(UpdateBalloonText), version);
 
     // 日志
     public static string LogStarting(string version, string architecture, string os) =>
@@ -87,6 +107,16 @@ public static class Strings
     public static string LogStopSending => Get(nameof(LogStopSending));
     public static string LogAddressChanged(string mac, string from, string to) => Format(nameof(LogAddressChanged), mac, from, to);
     public static string LogSessionEnding => Get(nameof(LogSessionEnding));
+    public static string LogCloseRequested => Get(nameof(LogCloseRequested));
+    public static string LogUpToDate(string current, string latest) => Format(nameof(LogUpToDate), current, latest);
+    public static string LogUpdateNoInstaller(string version, string architecture) =>
+        Format(nameof(LogUpdateNoInstaller), version, architecture);
+    public static string LogUpdateAvailable(string current, string latest) => Format(nameof(LogUpdateAvailable), current, latest);
+    public static string LogUpdateCheckFailed(string reason) => Format(nameof(LogUpdateCheckFailed), reason);
+    public static string LogUpdateDownloaded(string file, long bytes, string sha256) =>
+        Format(nameof(LogUpdateDownloaded), file, bytes, sha256);
+    public static string LogUpdateInstalling(string version) => Format(nameof(LogUpdateInstalling), version);
+    public static string LogUpdateFailed(string reason) => Format(nameof(LogUpdateFailed), reason);
     public static string LogExit => Get(nameof(LogExit));
     public static string LogUnhandled(int hresult, object exception) =>
         Format(nameof(LogUnhandled), hresult.ToString("x8", CultureInfo.InvariantCulture), exception);

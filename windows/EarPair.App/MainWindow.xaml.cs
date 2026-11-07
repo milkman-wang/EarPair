@@ -102,10 +102,11 @@ public sealed partial class MainWindow : Window
 
     private void UpdateTitleBarRegions()
     {
-        if (_closed || Content?.XamlRoot is not { } root || MoreButton.ActualWidth <= 0) return;
+        // 最小化时系统按钮的宽度（RightInset）是 0，照着设的话还原后“⋯”会躲到关闭按钮底下
+        if (_closed || !IsShown || Content?.XamlRoot is not { } root || MoreButton.ActualWidth <= 0) return;
         double scale = root.RasterizationScale;
         double right = AppWindow.TitleBar.RightInset / scale;
-        if (Math.Abs(AppTitleBar.Padding.Right - right) > 0.5) AppTitleBar.Padding = new Thickness(16, 0, right, 0);
+        if (right > 0 && Math.Abs(AppTitleBar.Padding.Right - right) > 0.5) AppTitleBar.Padding = new Thickness(16, 0, right, 0);
         Rect bounds = MoreButton.TransformToVisual(null)
             .TransformBounds(new Rect(0, 0, MoreButton.ActualWidth, MoreButton.ActualHeight));
         var region = new RectInt32((int)Math.Round(bounds.X * scale), (int)Math.Round(bounds.Y * scale),
@@ -136,6 +137,7 @@ public sealed partial class MainWindow : Window
             if (status.Path is { } path) Route.Apply(path, status.PathDescription);
             else RefreshPicker();
             ShowNotice(status.Notice);
+            ShowUpdate();
 
             TargetButton.Content = target is null ? Strings.ChooseMac : App.MacTitle(target, _app.AvailableMacs());
             MuteSwitch.IsOn = _app.Settings.MuteLocal;
@@ -272,6 +274,65 @@ public sealed partial class MainWindow : Window
         else _app.StopSending();
     }
 
+    /// <summary>更新提示条：自动检查只在有新版本时出现；“正在检查”“已是最新”“检查失败”只回应手动检查</summary>
+    private void ShowUpdate()
+    {
+        Updater updater = _app.Updater;
+        string version = updater.Latest?.Version.ToString(3) ?? "";
+        (string? title, string? message, InfoBarSeverity severity, string? action, bool closable) = updater.State switch
+        {
+            UpdateState.Available => (Strings.UpdateAvailableTitle(version), Strings.UpdateAvailableText,
+                                      InfoBarSeverity.Informational, Strings.UpdateNow, true),
+            UpdateState.Downloading => (null, Strings.UpdateDownloading(version, updater.Percent),
+                                        InfoBarSeverity.Informational, null, false),
+            UpdateState.Installing => (null, Strings.UpdateInstalling, InfoBarSeverity.Informational, null, false),
+            UpdateState.DownloadFailed => (null, Strings.UpdateFailed(updater.Error ?? ""), InfoBarSeverity.Warning,
+                                           Strings.Retry, true),
+            UpdateState.Checking when updater.Manual => (null, Strings.CheckingForUpdates, InfoBarSeverity.Informational, null, false),
+            UpdateState.UpToDate when updater.Manual => (null, Strings.UpToDate(App.Version), InfoBarSeverity.Success, null, true),
+            UpdateState.CheckFailed => (null, Strings.UpdateCheckFailed(updater.Error ?? ""), InfoBarSeverity.Warning, null, true),
+            _ => ((string?)null, (string?)null, InfoBarSeverity.Informational, (string?)null, false),
+        };
+        if (message is null || _app.UpdateBarDismissed)
+        {
+            UpdateBar.IsOpen = false;
+            UpdateBar.Visibility = Visibility.Collapsed;
+            return;
+        }
+        UpdateBar.Title = title ?? "";
+        UpdateBar.Message = message;
+        UpdateBar.Severity = severity;
+        UpdateBar.IsClosable = closable;
+        UpdateButton.Visibility = action is null ? Visibility.Collapsed : Visibility.Visible;
+        UpdateButton.Content = action;
+        DownloadPageLink.Visibility = updater.State == UpdateState.DownloadFailed && updater.Latest is not null
+            ? Visibility.Visible : Visibility.Collapsed;
+        UpdateBar.Visibility = Visibility.Visible;
+        UpdateBar.IsOpen = true;
+    }
+
+    private void OnUpdateAction(object sender, RoutedEventArgs e)
+    {
+        if (_app.Updater.State is UpdateState.Available or UpdateState.DownloadFailed) _app.InstallUpdate();
+    }
+
+    private void OnOpenDownloadPage(object sender, RoutedEventArgs e)
+    {
+        if (_app.Updater.Latest is not { PageUrl.Length: > 0 } release) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(release.PageUrl) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            // 打不开浏览器就算了
+        }
+    }
+
+    private void OnUpdateBarClosed(InfoBar sender, object args) => _app.DismissUpdateBar();
+
+    private void OnCheckForUpdates(object sender, RoutedEventArgs e) => _app.CheckForUpdates(manual: true);
+
     private void OnNoticeAction(object sender, RoutedEventArgs e)
     {
         switch (NoticeButton.Tag)
@@ -370,7 +431,12 @@ public sealed partial class MainWindow : Window
         // 最小化、还原会改窗口位置和大小，不一定有 DidVisibilityChange
         if (args.DidVisibilityChange || args.DidSizeChange || args.DidPositionChange || args.DidPresenterChange)
             UpdateMeterTimer();
-        if (args.DidSizeChange || args.DidPresenterChange) UpdateTitleBarRegions();
+        if (args.DidSizeChange || args.DidPresenterChange)
+        {
+            UpdateTitleBarRegions();
+            // 刚还原时系统按钮的宽度可能还没更新：排在这次布局之后再算一次
+            DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, UpdateTitleBarRegions);
+        }
         if (!args.DidSizeChange || !IsShown) return; // 最小化时的尺寸不记
         double scale = WindowHelper.Scale(this);
         _app.Settings.WindowWidth = Math.Round(sender.Size.Width / scale);
