@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 主窗口的页面
 public enum MainSection: String, CaseIterable, Identifiable, Sendable {
-    case overview, sound, network, connection
+    case overview, sound, spatial, network, connection
 
     public var id: Self { self }
 
@@ -12,6 +12,7 @@ public enum MainSection: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .overview: return Text("Overview", bundle: .module)
         case .sound: return Text("Sound", bundle: .module)
+        case .spatial: return Text("Spatial Audio", bundle: .module)
         case .network: return Text("Network", bundle: .module)
         case .connection: return Text("Connection", bundle: .module)
         }
@@ -21,6 +22,7 @@ public enum MainSection: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .overview: return "waveform"
         case .sound: return "speaker.wave.2.fill"
+        case .spatial: return "headphones"
         case .network: return "network"
         case .connection: return "link"
         }
@@ -30,6 +32,7 @@ public enum MainSection: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .overview: return .blue
         case .sound: return .pink
+        case .spatial: return .purple
         case .network: return .green
         case .connection: return .orange
         }
@@ -65,12 +68,17 @@ public struct MainWindow: View {
                 switch section {
                 case .overview: OverviewPane(controller: controller)
                 case .sound: SoundPane(controller: controller)
+                case .spatial: SpatialPane(controller: controller)
                 case .network: NetworkPane(controller: controller)
                 case .connection: ConnectionPane(controller: controller)
                 }
             }
             .navigationTitle(section.title)
             .background { SidebarCollapseFix().frame(width: 0, height: 0) }
+        }
+        // 菜单栏面板上点了还没设置过的空间音频：翻到这一页（窗口是因此才打开的，或者本来就开着）
+        .onReceive(controller.spatial.$pageRequest) { _ in
+            if controller.spatial.takePageRequest() { selection = .spatial }
         }
         // 表单超过 1100 pt 宽以后，标签和数值之间全是空白：限制最大宽度（系统设置也是这样）
         .frame(minWidth: 760, idealWidth: 900, maxWidth: 1120, minHeight: 520, idealHeight: 640)

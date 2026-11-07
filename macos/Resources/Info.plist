@@ -39,5 +39,9 @@
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>EarPair receives sound from Windows PCs on your local network.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>EarPair places this Mac’s sound where its screen is, so it moves aside when you look at your PC.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>EarPair follows the direction of your AirPods to place sound from your PC where its screen is.</string>
 </dict>
 </plist>

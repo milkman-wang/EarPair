@@ -212,6 +212,47 @@ MainActor.assumeIsolated {
         render(MainWindow(controller: controller(for: scenario), initialSection: .connection),
                name: "window-connection-\(scenario.name)-light", appearance: .aqua, size: CGSize(width: 900, height: 640))
     }
+    // 空间音频页的各种状态，和打开了空间音频的菜单栏面板
+    let spatialStates: [(String, SpatialController)] = [
+        ("off", SpatialController(preview: .off, enabled: false, angle: nil)),
+        ("active", SpatialController(preview: .active, enabled: true, angle: 52, macRelative: -9, senderRelative: 43)),
+        ("setup-mac", SpatialController(preview: .needsSetup, enabled: true, angle: nil, setup: .mac, setupProgress: 0.6)),
+        ("setup-sender", SpatialController(preview: .needsSetup, enabled: true, angle: nil, setup: .sender)),
+        ("setup-review", SpatialController(preview: .needsSetup, enabled: true, angle: nil, setup: .review(angle: 52))),
+        ("setup-failed", SpatialController(preview: .needsSetup, enabled: true, angle: nil, setup: .failed)),
+        ("waiting", SpatialController(preview: .waitingForSender, enabled: true, angle: -38, macRelative: 2,
+                                      senderRelative: -36)),
+        ("noheadphones", SpatialController(preview: .noHeadphones, enabled: true, angle: 52)),
+        ("nopermission", SpatialController(preview: .noPermission, enabled: true, angle: 52)),
+        ("mac-denied", SpatialController(preview: .active, enabled: true, angle: 52, macRelative: -9, senderRelative: 43,
+                                         macPermissionDenied: true)),
+    ]
+    for (name, spatial) in spatialStates {
+        let model = ReceiverController(preview: streaming(.playing, input: -17.6, output: -9.4), addresses: addresses,
+                                       bitrateKbps: 1587, history: history(sound: true), linkState: .playing,
+                                       senderName: "DESKTOP-7Q2", senderKind: .desktop, spatial: spatial)
+        for (look, appearance) in looks where name == "active" || look == "light" {
+            render(MainWindow(controller: model, initialSection: .spatial),
+                   name: "window-spatial-state-\(name)-\(look)", appearance: appearance, size: CGSize(width: 900, height: 640))
+        }
+        if name == "active" {
+            render(MenuBarContent(controller: model), name: "panel-spatial-on-light", appearance: .aqua, size: nil)
+        }
+    }
+    // 菜单栏面板上的更新那一行
+    let release = AppRelease(version: "0.2.2", page: URL(string: "https://github.com")!,
+                             dmg: URL(string: "https://github.com")!, size: 1, sha256: nil)
+    let updateStates: [(String, UpdateController.State)] = [
+        ("available", .available(release)), ("downloading", .downloading(0.42)),
+        ("failed", .failed(chinese ? "下载失败：网络断了" : "The download failed: offline", release)),
+    ]
+    for (name, state) in updateStates {
+        let model = ReceiverController(preview: streaming(.playing, input: -17.6, output: -9.4), addresses: addresses,
+                                       bitrateKbps: 1587, history: history(sound: true), linkState: .playing,
+                                       senderName: "DESKTOP-7Q2", senderKind: .desktop,
+                                       updates: UpdateController(preview: state))
+        render(MenuBarContent(controller: model), name: "panel-update-\(name)-light", appearance: .aqua, size: nil)
+    }
     // 最小、最大窗口：名字不重叠，路线居中
     for scenario in scenarios where scenario.name == "playing" {
         for size in [CGSize(width: 760, height: 520), CGSize(width: 1120, height: 640)] {

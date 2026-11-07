@@ -1,2 +1,6 @@
 /* 本地网络权限对话框里的说明 */
 "NSLocalNetworkUsageDescription" = "EarPair receives sound from Windows PCs on your local network.";
+/* 运动数据权限对话框里的说明 */
+"NSMotionUsageDescription" = "EarPair follows the direction of your AirPods to place sound from your PC where its screen is.";
+/* 系统录音权限对话框里的说明 */
+"NSAudioCaptureUsageDescription" = "EarPair places this Mac’s sound where its screen is, so it moves aside when you look at your PC.";

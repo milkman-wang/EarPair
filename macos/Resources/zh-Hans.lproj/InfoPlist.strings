@@ -1,2 +1,6 @@
 /* 本地网络权限对话框里的说明 */
 "NSLocalNetworkUsageDescription" = "EarPair 需要接收局域网里 Windows 电脑发来的声音。";
+/* 运动数据权限对话框里的说明 */
+"NSMotionUsageDescription" = "EarPair 需要读取 AirPods 的朝向，把电脑的声音放在它的屏幕所在的方向。";
+/* 系统录音权限对话框里的说明 */
+"NSAudioCaptureUsageDescription" = "EarPair 会把这台 Mac 的声音放在它的屏幕方向，你看向电脑时它会移到一边。";

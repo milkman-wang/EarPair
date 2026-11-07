@@ -4,3 +4,12 @@
 "Can’t create a UDP socket: %@" = "无法创建 UDP 套接字：%@";
 "Port %@ is in use by another app, so EarPair can’t receive sound from Windows." = "端口 %@ 被其他程序占用，收不到 Windows 的声音。";
 "Can’t listen on port %@: %@" = "无法监听端口 %1$@：%2$@";
+
+/* 更新失败的原因 */
+"GitHub returned something unexpected." = "GitHub 返回的内容不对。";
+"This release has no Mac package." = "这个版本没有 Mac 的安装包。";
+"The download failed: %@" = "下载失败：%@";
+"The download is damaged." = "下载的文件损坏了。";
+"The package doesn’t contain a valid EarPair." = "安装包里没有完好的 EarPair。";
+"EarPair can’t replace itself in this folder." = "EarPair 没法替换这个文件夹里的自己。";
+"Installing failed: %@" = "安装失败：%@";

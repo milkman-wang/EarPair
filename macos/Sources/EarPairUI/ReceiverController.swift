@@ -120,6 +120,10 @@ public final class ReceiverController: ObservableObject {
     public let macName: String
     /// 菜单栏图标（单独发布，见 MenuBarIcon）
     public let menuBarIcon = MenuBarIcon()
+    /// 空间音频（单独发布）
+    public let spatial: SpatialController
+    /// 自动更新（单独发布）
+    public let updates: UpdateController
     /// 连上、断开时的系统通知（只在打包好的 App 里有）
     private var notifier: ConnectionNotifier?
     private var notices = ConnectionNoticePolicy()
@@ -232,7 +236,10 @@ public final class ReceiverController: ObservableObject {
         core.setBalance(Float(balance))
 
         self.core = core
-        output = AudioOutput(core: core)
+        let output = AudioOutput(core: core)
+        self.output = output
+        spatial = SpatialController(output: output)
+        updates = UpdateController(currentVersion: Self.appVersion)
         isLive = true
         macName = HostInfo.computerName
         self.volume = volume
@@ -254,10 +261,13 @@ public final class ReceiverController: ObservableObject {
                 linkState: LinkState, hasSound: Bool = true, senderName: String? = nil,
                 senderKind: DeviceKind? = nil, lastSenderName: String? = nil, lastSenderKind: DeviceKind? = nil,
                 macName: String = "milkman的MacBook Air",
-                outputDevice: OutputDevice? = OutputDevice(name: "milkman的AirPods Pro", transport: .bluetooth)) {
+                outputDevice: OutputDevice? = OutputDevice(name: "milkman的AirPods Pro", transport: .bluetooth),
+                spatial: SpatialController? = nil, updates: UpdateController? = nil) {
         let core = ReceiverCore()
         self.core = core
         output = AudioOutput(core: core)
+        self.spatial = spatial ?? SpatialController(preview: .off, enabled: false, angle: nil)
+        self.updates = updates ?? UpdateController(preview: .idle)
         isLive = false
         self.macName = macName
         self.volume = volume
@@ -331,10 +341,12 @@ public final class ReceiverController: ObservableObject {
         let monitor = OutputDeviceMonitor()
         monitor.onChange = { [weak self] device in
             self?.outputDevice = device
+            self?.spatial.update(outputDevice: device)
             self?.updateResponderInfo()
             self?.outputRetryAt = -.infinity // 换了输出设备：立刻再试
         }
         outputDevice = monitor.current
+        spatial.update(outputDevice: outputDevice)
         outputMonitor = monitor
         // 回复器是在读到输出设备之前建的：补上，Windows 一开始就能画出 Mac 的输出设备
         updateResponderInfo()
@@ -480,6 +492,7 @@ public final class ReceiverController: ObservableObject {
         updateSenderIdentity(address: stats.senderAddress)
         menuBarIcon.update(menuBarSymbol)
         updateNotices(now: now, endReason: stats.endReason)
+        spatial.update(linkState: linkState, now: now)
     }
 
     /// 连上、手动停止、设备没了、网络断开（等一会儿还没恢复才发）、重新连上、放弃重连：发系统通知
