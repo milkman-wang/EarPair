@@ -91,6 +91,7 @@ macos/scripts/check-strings.sh                            # Mac 每条界面文�
 - 单元测试包括 30 分钟时钟漂移模拟（±200 ppm）、丢包和乱序、音量平衡和限幅、控制包（和 C# 端共用逐字节一致的测试向量）。
 - `tools/e2e.sh` 跑三轮，每轮约 30 秒：时钟偏差、恶劣网络、C# 打包代码 → Swift 接收端。没装 .NET 时跳过最后一轮。
 
+- 更新的测试会做一个真的 dmg、替换一个假的 App。`EARPAIR_LIVE_UPDATE_TEST=1 swift test --package-path macos --filter liveRelease` 还会从 GitHub 下载最新的 Mac 安装包并解开（不安装）。App 里设 `EARPAIR_UPDATE_FEED=<地址>` 可以让检查更新改查别的 `releases/latest` 格式的 JSON。
 - 空间音频：跟踪算法（`ScreenAnchors`）用 AirPods 的实录数据和模拟数据在单独的探针里调过；单元测试离线覆盖校准、摆放和渲染（不出声）。
 
 手边没有 Windows？在 Mac 上跑接收端和 Python 测试发送端，都在仓库根目录下运行：

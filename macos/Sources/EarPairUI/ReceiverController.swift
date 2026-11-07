@@ -122,6 +122,8 @@ public final class ReceiverController: ObservableObject {
     public let menuBarIcon = MenuBarIcon()
     /// 空间音频（单独发布）
     public let spatial: SpatialController
+    /// 自动更新（单独发布）
+    public let updates: UpdateController
     /// 连上、断开时的系统通知（只在打包好的 App 里有）
     private var notifier: ConnectionNotifier?
     private var notices = ConnectionNoticePolicy()
@@ -237,6 +239,7 @@ public final class ReceiverController: ObservableObject {
         let output = AudioOutput(core: core)
         self.output = output
         spatial = SpatialController(output: output)
+        updates = UpdateController(currentVersion: Self.appVersion)
         isLive = true
         macName = HostInfo.computerName
         self.volume = volume
@@ -259,11 +262,12 @@ public final class ReceiverController: ObservableObject {
                 senderKind: DeviceKind? = nil, lastSenderName: String? = nil, lastSenderKind: DeviceKind? = nil,
                 macName: String = "milkman的MacBook Air",
                 outputDevice: OutputDevice? = OutputDevice(name: "milkman的AirPods Pro", transport: .bluetooth),
-                spatial: SpatialController? = nil) {
+                spatial: SpatialController? = nil, updates: UpdateController? = nil) {
         let core = ReceiverCore()
         self.core = core
         output = AudioOutput(core: core)
         self.spatial = spatial ?? SpatialController(preview: .off, enabled: false, angle: nil)
+        self.updates = updates ?? UpdateController(preview: .idle)
         isLive = false
         self.macName = macName
         self.volume = volume

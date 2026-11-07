@@ -23,7 +23,10 @@ struct EarPairApp: App {
         .defaultSize(width: 900, height: 640)
         .defaultPosition(.center)
         // 没有帮助文档：去掉“帮助”菜单里点了只会提示没有帮助的那一项
-        .commands { CommandGroup(replacing: .help) {} }
+        .commands {
+            CommandGroup(replacing: .help) {}
+            UpdateCommands(updates: controller.updates)
+        }
 
         MenuBarScene(controller: controller)
     }

@@ -239,6 +239,20 @@ MainActor.assumeIsolated {
             render(MenuBarContent(controller: model), name: "panel-spatial-on-light", appearance: .aqua, size: nil)
         }
     }
+    // 菜单栏面板上的更新那一行
+    let release = AppRelease(version: "0.2.2", page: URL(string: "https://github.com")!,
+                             dmg: URL(string: "https://github.com")!, size: 1, sha256: nil)
+    let updateStates: [(String, UpdateController.State)] = [
+        ("available", .available(release)), ("downloading", .downloading(0.42)),
+        ("failed", .failed(chinese ? "下载失败：网络断了" : "The download failed: offline", release)),
+    ]
+    for (name, state) in updateStates {
+        let model = ReceiverController(preview: streaming(.playing, input: -17.6, output: -9.4), addresses: addresses,
+                                       bitrateKbps: 1587, history: history(sound: true), linkState: .playing,
+                                       senderName: "DESKTOP-7Q2", senderKind: .desktop,
+                                       updates: UpdateController(preview: state))
+        render(MenuBarContent(controller: model), name: "panel-update-\(name)-light", appearance: .aqua, size: nil)
+    }
     // 最小、最大窗口：名字不重叠，路线居中
     for scenario in scenarios where scenario.name == "playing" {
         for size in [CGSize(width: 760, height: 520), CGSize(width: 1120, height: 640)] {

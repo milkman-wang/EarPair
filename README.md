@@ -27,6 +27,7 @@ Your AirPods stay connected to your Mac. EarPair sends your Windows PC's sound o
 - **Idle when the PC is quiet.** After a few seconds of silence the PC stops streaming and only keeps a light handshake with the Mac, saving battery and Wi‑Fi. Sound picks up again the moment something plays.
 - **Tells a stop from a dropout.** The Mac shows a notification when a PC connects or stops sending. If the network drops instead, the notification says so and EarPair reconnects by itself.
 - **Spatial audio with AirPods.** Show EarPair once where the Mac and the PC are. The PC's sound then comes from the PC's screen and the Mac's from the Mac's, and both stay put as you turn your head; the one you look away from moves aside and gets quieter. It pauses while the PC isn't sending and picks up again when it's back.
+- **Updates itself on the Mac.** EarPair checks GitHub for new versions; one click in the menu bar downloads, installs and reopens it.
 - **Stays out of the way.** It lives in the Mac's menu bar and in the Windows notification area, and can start with Windows.
 - **Nothing to install on Windows.** Unzip and run; the .NET runtime is included.
 

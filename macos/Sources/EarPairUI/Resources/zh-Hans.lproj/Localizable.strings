@@ -137,3 +137,18 @@
 "Move this Mac’s sound too" = "Mac 自己的声音也跟着转";
 "Allow EarPair to record system audio in System Settings." = "请在系统设置里允许 EarPair 录制系统声音。";
 "Couldn’t capture this Mac’s sound: %@" = "没能截取 Mac 的声音：%@";
+
+/* 更新 */
+"Check for Updates…" = "检查更新…";
+"Update to %@" = "更新到 %@";
+"Downloading update… %@" = "正在下载更新… %@";
+"Installing update…" = "正在安装更新…";
+"Couldn’t update: %@" = "没能更新：%@";
+"Download from GitHub" = "从 GitHub 下载";
+"EarPair %@ is available" = "EarPair %@ 可以更新了";
+"You have %@." = "你现在用的是 %@。";
+"Update" = "更新";
+"Later" = "以后再说";
+"EarPair is up to date" = "EarPair 已是最新版本";
+"%@ is the latest version." = "%@ 是最新版本。";
+"Couldn’t check for updates" = "没能检查更新";

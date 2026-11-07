@@ -14,6 +14,8 @@ public struct MenuBarContent: View {
         spatial = controller.spatial
     }
 
+    private var updates: UpdateController { controller.updates }
+
     public var body: some View {
         VStack(spacing: 0) {
             RouteView(nodes: [controller.senderNode, controller.outputNode], links: [controller.panelLink],
@@ -42,10 +44,12 @@ public struct MenuBarContent: View {
             }
             .padding(.top, 8)
             Divider().padding(.vertical, 8)
+            UpdateRow(updates: updates)
             MenuRow(title: Text("Open EarPair", bundle: .module)) {
                 NSApp.activate()
                 openWindow(id: MainWindow.id)
             }
+            MenuRow(title: Text("Check for Updates…", bundle: .module)) { updates.checkFromMenu() }
             MenuRow(title: Text("Quit EarPair", bundle: .module), shortcut: "⌘Q") {
                 NSApplication.shared.terminate(nil)
             }
