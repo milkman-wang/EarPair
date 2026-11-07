@@ -240,7 +240,10 @@ public partial class App : Application
         QueueRefresh();
     }
 
-    /// <summary>Bonjour 报告了目标 Mac 的新地址（DHCP 换了 IP）：原地址没有回应时跟着换</summary>
+    /// <summary>
+    /// Bonjour 报告了目标 Mac 的新地址：原地址没有回应时跟着换（DHCP 换了 IP）；新地址更好时也换，
+    /// 比如之前连的是 Mac 在 ZeroTier 里的地址，现在找到了同一个局域网里的（只重连一次）
+    /// </summary>
     private void OnDiscoveryChanged()
     {
         if (Settings.Target is { Id: { Length: > 0 } id } target)
@@ -250,7 +253,11 @@ public partial class App : Application
             {
                 bool waiting = Engine.Snapshot.State is SenderState.WaitingForMac or SenderState.Failed ||
                                Engine.Snapshot.Health == RemoteHealth.NoResponse;
-                if (waiting || !SwitchOn)
+                // 手动填的是主机名时不替换
+                bool better = System.Net.IPAddress.TryParse(target.Host, out _) &&
+                              AddressPicker.Pick([target.Host, seen.Address], target.Host, AddressPicker.Current())
+                              == seen.Address;
+                if (waiting || !SwitchOn || better)
                 {
                     AppLog.Write(Strings.LogAddressChanged(target.Name, target.Host, seen.Address));
                     target.Host = seen.Address;

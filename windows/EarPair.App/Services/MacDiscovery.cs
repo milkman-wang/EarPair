@@ -1,6 +1,3 @@
-using System.Net;
-using System.Net.NetworkInformation;
-using System.Net.Sockets;
 using Windows.Devices.Enumeration;
 
 namespace EarPair.App.Services;
@@ -86,7 +83,7 @@ public sealed class MacDiscovery : IDisposable
             int port = properties.TryGetValue(Properties[2], out object? p) && p is not null ? Convert.ToInt32(p) : old?.Port ?? 0;
             if (!_addresses.TryGetValue(id, out HashSet<string>? seen)) _addresses[id] = seen = [];
             if (properties.TryGetValue(Properties[3], out object? a) && a is string[] list) seen.UnionWith(list);
-            string? address = PickAddress(seen, old?.Address);
+            string? address = AddressPicker.Pick(seen, old?.Address, AddressPicker.Current());
             if (name is null || address is null || port == 0) return; // 信息还不全，等 Updated
             string[]? text = properties.TryGetValue(Properties[4], out object? t) ? t as string[] : null;
             string? Txt(string key) =>
@@ -109,56 +106,6 @@ public sealed class MacDiscovery : IDisposable
             _addresses.Remove(id);
         }
         if (removed) Changed?.Invoke();
-    }
-
-    /// <summary>
-    /// Mac 在每个网卡上都会广播自己的地址（Wi-Fi、虚拟机网桥、VPN……）。
-    /// 选和本机某个网卡在同一网段的 IPv4 地址；之前选过的地址还在就继续用，避免来回跳。
-    /// </summary>
-    private static string? PickAddress(IEnumerable<string> addresses, string? previous)
-    {
-        List<IPAddress> candidates = addresses
-            .Select(s => IPAddress.TryParse(s, out IPAddress? ip) ? ip : null)
-            .OfType<IPAddress>()
-            .Where(ip => ip.AddressFamily == AddressFamily.InterNetwork && !ip.ToString().StartsWith("169.254."))
-            .ToList();
-        if (candidates.Count == 0) return null;
-        List<(IPAddress Address, IPAddress Mask)> local = LocalNetworks();
-        bool OnLink(IPAddress ip) => local.Any(n => SameSubnet(ip, n.Address, n.Mask));
-        IPAddress? kept = candidates.FirstOrDefault(ip => ip.ToString() == previous);
-        if (kept is not null && OnLink(kept)) return previous;
-        IPAddress? onLink = candidates.FirstOrDefault(OnLink);
-        return (onLink ?? kept ?? candidates[0]).ToString();
-    }
-
-    private static List<(IPAddress, IPAddress)> LocalNetworks()
-    {
-        var result = new List<(IPAddress, IPAddress)>();
-        try
-        {
-            foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
-            {
-                if (nic.OperationalStatus != OperationalStatus.Up) continue;
-                foreach (UnicastIPAddressInformation info in nic.GetIPProperties().UnicastAddresses)
-                {
-                    if (info.Address.AddressFamily == AddressFamily.InterNetwork && info.IPv4Mask is not null)
-                        result.Add((info.Address, info.IPv4Mask));
-                }
-            }
-        }
-        catch (NetworkInformationException)
-        {
-            // 取不到就不按网段挑
-        }
-        return result;
-    }
-
-    private static bool SameSubnet(IPAddress a, IPAddress b, IPAddress mask)
-    {
-        byte[] x = a.GetAddressBytes(), y = b.GetAddressBytes(), m = mask.GetAddressBytes();
-        for (int i = 0; i < 4; i++)
-            if ((x[i] & m[i]) != (y[i] & m[i])) return false;
-        return true;
     }
 
 #if DEBUG

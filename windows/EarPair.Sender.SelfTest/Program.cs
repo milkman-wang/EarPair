@@ -9,6 +9,9 @@ using System.Globalization;
 using System.Reflection;
 using System.Resources;
 using System.Text.RegularExpressions;
+using System.Net;
+using System.Net.NetworkInformation;
+using EarPair.App.Services;
 using EarPair.Sender;
 using NAudio.Wave;
 
@@ -24,8 +27,42 @@ TestPcmConverter();
 TestOptions();
 TestControlPacket();
 TestStrings();
+TestAddressPicker();
 Console.WriteLine(failures == 0 ? "全部通过" : $"{failures} 项没通过");
 return failures == 0 ? 0 : 1;
+
+// Mac 广播了好几个地址时 Windows 端挑哪个（MacDiscovery 用的就是 AddressPicker）
+void TestAddressPicker()
+{
+    Console.WriteLine("Mac 地址的选择");
+    LocalNetwork Net(string ip, bool gateway, bool isVirtual) =>
+        new(IPAddress.Parse(ip), IPAddress.Parse("255.255.255.0"), gateway, isVirtual);
+    var wifi = Net("192.168.1.50", gateway: true, isVirtual: false);
+    var zeroTier = Net("10.10.10.7", gateway: false, isVirtual: true);
+    var cable = Net("169.254.10.2", gateway: false, isVirtual: false);
+    string[] fromMac = ["10.10.10.4", "192.168.1.199", "10.211.55.2"];
+
+    Check(AddressPicker.Pick(fromMac, null, [zeroTier, wifi]) == "192.168.1.199",
+          "电脑也在 ZeroTier 里：选局域网地址，不选 ZeroTier 的");
+    Check(AddressPicker.Pick(fromMac, "10.10.10.4", [zeroTier, wifi]) == "192.168.1.199",
+          "之前选了 ZeroTier 的地址：换回局域网地址");
+    Check(AddressPicker.Pick(fromMac, null, [zeroTier]) == "10.10.10.4",
+          "只有 ZeroTier 连得到：用 ZeroTier 的地址");
+    Check(AddressPicker.Pick(["192.168.1.199", "192.168.1.200"], "192.168.1.200", [wifi]) == "192.168.1.200",
+          "同一档里之前选过的地址还在：继续用，不来回跳");
+    Check(AddressPicker.Pick(["10.0.0.9", "192.168.1.199"], null, [Net("10.0.0.2", false, false), wifi]) == "192.168.1.199",
+          "两块真实网卡：有默认网关的优先");
+    Check(AddressPicker.Pick(["172.16.0.5", "172.16.0.6"], "172.16.0.6", [wifi]) == "172.16.0.6",
+          "都不在本机网段：之前选过的还在就继续用");
+    Check(AddressPicker.Pick(["169.254.3.3", "fe80::1"], null, [cable]) is null,
+          "只有链路本地地址和 IPv6：不选");
+    Check(AddressPicker.IsVirtual(NetworkInterfaceType.Ethernet, "ZeroTier Virtual Port", "ZeroTier One [abc]") &&
+          AddressPicker.IsVirtual(NetworkInterfaceType.Ethernet, "Tailscale Tunnel", "Tailscale") &&
+          AddressPicker.IsVirtual(NetworkInterfaceType.Tunnel, "Some VPN", "vpn0") &&
+          !AddressPicker.IsVirtual(NetworkInterfaceType.Ethernet, "Intel(R) Ethernet Connection", "以太网") &&
+          !AddressPicker.IsVirtual(NetworkInterfaceType.Wireless80211, "Intel(R) Wi-Fi 6E AX211", "WLAN"),
+          "认得出 ZeroTier、Tailscale、隧道网卡，不误判真实网卡");
+}
 
 void Check(bool ok, string name)
 {

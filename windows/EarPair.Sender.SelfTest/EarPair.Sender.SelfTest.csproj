@@ -19,6 +19,7 @@
     <Compile Include="../EarPair.Sender.Core/PcmConverter.cs" Link="Shared/PcmConverter.cs" />
     <Compile Include="../EarPair.Sender.Core/UdpSender.cs" Link="Shared/UdpSender.cs" />
     <Compile Include="../EarPair.Sender.Core/ControlPacket.cs" Link="Shared/ControlPacket.cs" />
+    <Compile Include="../EarPair.App/Services/AddressPicker.cs" Link="Shared/App/AddressPicker.cs" />
   </ItemGroup>
 
   <ItemGroup>
