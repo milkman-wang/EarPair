@@ -51,11 +51,11 @@ AirPods 一直连着 Mac。EarPair 把 Windows 电脑的声音经局域网送到
 
 ## 开始使用
 
-1. **在 Mac 上**从 [Releases](https://github.com/milkman-wang/EarPair/releases/latest) 下载 `EarPair-0.2.0-macos-universal.dmg`，打开后把 EarPair 拖进“应用程序”，再从那里打开它。
+1. **在 Mac 上**从 [Releases](https://github.com/milkman-wang/EarPair/releases/latest) 下载 `EarPair-0.2.1-macos-universal.dmg`，打开后把 EarPair 拖进“应用程序”，再从那里打开它。
 
    EarPair 的窗口会打开，菜单栏里也会出现一个耳朵图标；关掉窗口后 EarPair 继续在菜单栏里运行。macOS 询问是否允许 EarPair 查找本地网络上的设备时，点 **允许**：电脑就是靠这个找到 Mac 的。通知也请允许，这样电脑连上、断开时你都会知道。
 
-2. **在电脑上**从 [Releases](https://github.com/milkman-wang/EarPair/releases/latest) 下载 `EarPair-0.2.0-win-x64-setup.exe`（Arm 电脑用 `win-arm64`）并运行，装好后 EarPair 会自动打开。
+2. **在电脑上**从 [Releases](https://github.com/milkman-wang/EarPair/releases/latest) 下载 `EarPair-0.2.1-win-x64-setup.exe`（Arm 电脑用 `win-arm64`）并运行，装好后 EarPair 会自动打开。
 
 3. **点一下你的 Mac**。电脑的声音就从 Mac 播放了，电脑自己的扬声器在你停止之前一直保持静音。
 

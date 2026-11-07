@@ -16,7 +16,7 @@ namespace EarPair.App;
 public partial class App : Application
 {
     public static readonly string Version =
-        Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.2.0";
+        Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.2.1";
 
     private readonly bool _startInBackground;
     private DispatcherQueue? _dispatcher;

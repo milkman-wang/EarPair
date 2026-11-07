@@ -9,7 +9,7 @@
     <RootNamespace>EarPair.Sender</RootNamespace>
     <!-- Strings.resx 是英文；中文在 Strings.zh-Hans.resx（卫星程序集，单文件发布时也打进去） -->
     <NeutralLanguage>en</NeutralLanguage>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <!-- 不能用 InvariantGlobalization：那样界面语言永远是英文，要按 Windows 的显示语言选中文或英文 -->
     <InvariantGlobalization>false</InvariantGlobalization>
     <!-- 允许在 Mac / Linux 上编译检查（运行仍然需要 Windows） -->
