@@ -110,3 +110,30 @@
 "The network is unstable. Trying to reconnect…" = "网络不稳定，正在尝试重新连接…";
 "Couldn’t reconnect to %@" = "没能重新连上 %@";
 "EarPair will connect again when the PC starts sending." = "它再次发送时会自动连上";
+
+/* 空间音频 */
+"Spatial Audio" = "空间音频";
+"Spatial audio" = "空间音频";
+"Positions" = "位置";
+"Set Up…" = "设置…";
+"Set Up Again…" = "重新设置…";
+"Center on Mac" = "对准 Mac";
+"Look at the Mac’s screen, then click" = "看着 Mac 的屏幕时点一下";
+"Volume when looking away" = "看别处时的音量";
+"Allow EarPair to use motion data in System Settings." = "请在系统设置里允许 EarPair 使用运动数据。";
+"Open System Settings" = "打开系统设置";
+"Use AirPods or other headphones that support head tracking." = "需要支持头部追踪的 AirPods 或其他耳机。";
+"Resumes automatically when %@ is sending" = "%@ 发送时自动继续";
+"%@ is %lld° to the left of the Mac" = "%1$@ 在 Mac 左边 %2$lld°";
+"%@ is %lld° to the right of the Mac" = "%1$@ 在 Mac 右边 %2$lld°";
+"Face the center of this Mac’s screen" = "脸正对这台 Mac 屏幕的中间";
+"Now face the center of %@’s screen" = "现在脸正对 %@ 屏幕的中间";
+"Save these positions?" = "保存这两个位置？";
+"Save" = "保存";
+"Start Over" = "重来";
+"Cancel" = "取消";
+"Didn’t catch that. Hold still for a moment while facing each screen." = "没记下来。正对每块屏幕时，头稳住一会儿。";
+"Try Again" = "重试";
+"Move this Mac’s sound too" = "Mac 自己的声音也跟着转";
+"Allow EarPair to record system audio in System Settings." = "请在系统设置里允许 EarPair 录制系统声音。";
+"Couldn’t capture this Mac’s sound: %@" = "没能截取 Mac 的声音：%@";

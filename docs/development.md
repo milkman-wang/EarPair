@@ -91,6 +91,8 @@ macos/scripts/check-strings.sh                            # every Mac UI string 
 - The unit tests include 30-minute clock-drift simulations (±200 ppm), packet loss and reordering, loudness leveling and the limiter, and the control packets (byte-exact test vectors shared with the C# side).
 - `tools/e2e.sh` runs three rounds of about 30 seconds: clock drift, a bad network, and the C# packet code feeding the Swift receiver. The last round is skipped without .NET.
 
+- Spatial audio: the tracker (`ScreenAnchors`) was tuned with recorded AirPods data and synthetic sessions in a separate probe; the unit tests cover calibration, placement and rendering offline (no sound).
+
 No Windows machine at hand? Run the receiver and the Python test sender on the Mac, both from the repo root:
 
 ```bash

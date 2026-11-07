@@ -2,14 +2,16 @@ import AppKit
 import EarPairCore
 import SwiftUI
 
-/// 菜单栏弹出面板：路线（Windows → 耳机）、地址或错误、音量、静音和音量平衡两个开关、打开窗口 / 退出。
+/// 菜单栏弹出面板：路线（Windows → 耳机）、地址或错误、音量、静音、音量平衡和空间音频三个开关、打开窗口 / 退出。
 /// 样式参照系统的 Wi-Fi、蓝牙、声音菜单：平铺、分隔线分组、最下面是菜单项。
 public struct MenuBarContent: View {
     @ObservedObject var controller: ReceiverController
+    @ObservedObject var spatial: SpatialController
     @Environment(\.openWindow) private var openWindow
 
     public init(controller: ReceiverController) {
         self.controller = controller
+        spatial = controller.spatial
     }
 
     public var body: some View {
@@ -32,6 +34,13 @@ public struct MenuBarContent: View {
                            isOn: $controller.autoLevel)
             }
             .padding(.top, 12)
+            HStack(spacing: 8) {
+                // 还没设置过位置时，点它打开主窗口的空间音频页
+                ToggleTile(title: Text("Spatial audio", bundle: .module), systemImage: "headphones",
+                           isOn: Binding(get: { spatial.enabled }, set: { _ in spatial.toggleFromPanel() }))
+                Spacer(minLength: 0).frame(maxWidth: .infinity)
+            }
+            .padding(.top, 8)
             Divider().padding(.vertical, 8)
             MenuRow(title: Text("Open EarPair", bundle: .module)) {
                 NSApp.activate()
