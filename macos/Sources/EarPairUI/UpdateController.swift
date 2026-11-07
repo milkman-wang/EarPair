@@ -44,7 +44,7 @@ public final class UpdateController: ObservableObject {
     }
 
     /// 只用来渲染界面
-    public init(preview state: State, currentVersion: String = "0.2.1") {
+    public init(preview state: State, currentVersion: String = "0.2.2") {
         self.currentVersion = currentVersion
         self.state = state
         feed = Updater.feed

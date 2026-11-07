@@ -35,7 +35,7 @@ public sealed record SenderSettings(string Host, int Port = SenderEngine.Default
     public string SenderId { get; init; } = "";
     public string SenderName { get; init; } = HostIdentity.Name;
     public string SenderKind { get; init; } = HostIdentity.Kind;
-    public string App { get; init; } = "0.2.1";
+    public string App { get; init; } = "0.2.2";
     /// <summary>以前确认过这台 Mac 会回 STATUS（Mac 0.2）：一开始就按“有回传”处理</summary>
     public bool KnownToReply { get; init; }
     /// <summary>不管 Mac 有没有回应都一直发（用户点了“仍然发送”）</summary>

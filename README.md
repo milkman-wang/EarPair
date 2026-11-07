@@ -53,11 +53,11 @@ Both apps are in English and Simplified Chinese, following the system language.
 
 ## Getting started
 
-1. **On the Mac,** download `EarPair-0.2.1-macos-universal.dmg` from [Releases](https://github.com/milkman-wang/EarPair/releases/latest), open it, drag EarPair to Applications and open it from there.
+1. **On the Mac,** download `EarPair-0.2.2-macos-universal.dmg` from [Releases](https://github.com/milkman-wang/EarPair/releases/latest), open it, drag EarPair to Applications and open it from there.
 
    EarPair's window opens and an ear appears in the menu bar; closing the window keeps EarPair running there. When macOS asks whether EarPair may find devices on your local network, click **Allow**: that's how the PC finds the Mac. Allow notifications as well, so you know when a PC connects or drops off.
 
-2. **On the PC,** download `EarPair-0.2.1-win-x64-setup.exe` (`win-arm64` for Arm PCs) from [Releases](https://github.com/milkman-wang/EarPair/releases/latest) and run it. EarPair opens when setup finishes.
+2. **On the PC,** download `EarPair-0.2.2-win-x64-setup.exe` (`win-arm64` for Arm PCs) from [Releases](https://github.com/milkman-wang/EarPair/releases/latest) and run it. EarPair opens when setup finishes.
 
 3. **Click your Mac** in the list. The PC's sound now plays on the Mac, and the PC's speakers stay quiet until you stop.
 

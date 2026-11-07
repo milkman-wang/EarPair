@@ -12,7 +12,7 @@
     <RootNamespace>EarPair.App</RootNamespace>
     <AssemblyName>EarPair</AssemblyName>
     <Product>EarPair</Product>
-    <Version>0.2.1</Version>
+    <Version>0.2.2</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\EarPair.ico</ApplicationIcon>
     <Platforms>x64;ARM64</Platforms>
