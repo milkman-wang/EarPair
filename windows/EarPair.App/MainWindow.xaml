@@ -18,6 +18,11 @@
         <FontIcon Glyph="&#xE712;" FontSize="16" />
         <Button.Flyout>
           <MenuFlyout Placement="BottomEdgeAlignedRight">
+            <MenuFlyoutItem Text="{x:Bind local:Strings.CheckForUpdates}" Click="OnCheckForUpdates">
+              <MenuFlyoutItem.Icon>
+                <FontIcon Glyph="&#xE895;" />
+              </MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
             <MenuFlyoutItem Text="{x:Bind local:Strings.OpenLogFolder}" Click="OnOpenLogs">
               <MenuFlyoutItem.Icon>
                 <FontIcon Glyph="&#xE838;" />
@@ -32,6 +37,17 @@
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <StackPanel MaxWidth="720" Padding="24,8,24,24" Spacing="4">
+
+        <!-- 更新：有新版本、下载中、下载失败，或者手动检查的结果 -->
+        <InfoBar x:Name="UpdateBar" Margin="0,0,0,8" IsOpen="False" Visibility="Collapsed"
+                 CloseButtonClick="OnUpdateBarClosed">
+          <InfoBar.ActionButton>
+            <Button x:Name="UpdateButton" Click="OnUpdateAction" />
+          </InfoBar.ActionButton>
+          <!-- 下载或启动安装程序失败时的退路：去发布页手动下载 -->
+          <HyperlinkButton x:Name="DownloadPageLink" Content="{x:Bind local:Strings.OpenDownloadPage}"
+                           Padding="0" Margin="0,0,0,12" Visibility="Collapsed" Click="OnOpenDownloadPage" />
+        </InfoBar>
 
         <!-- 主卡片：状态和开关、路线、提示条（在底部，出现时路线不跳） -->
         <Border Padding="24" Margin="0,0,0,12" CornerRadius="{StaticResource OverlayCornerRadius}"

@@ -32,6 +32,9 @@ internal sealed partial class TrayIcon : IDisposable
     /// <summary>关机或注销（WM_ENDSESSION）：在界面线程上同步触发，处理完才会被结束，要在这里恢复本机声音。</summary>
     public event Action? SessionEnding;
 
+    /// <summary>WM_ENDSESSION 带 ENDSESSION_CLOSEAPP（安装程序 / 重启管理器要求关闭，不是关机）：App 应当退出。这时不触发 SessionEnding。</summary>
+    public event Action? CloseRequested;
+
     /// <summary>右键时调用，返回要显示的菜单项；null 表示分隔线。</summary>
     public Func<IReadOnlyList<MenuItem?>>? MenuProvider { get; set; }
 
@@ -130,6 +133,7 @@ internal sealed partial class TrayIcon : IDisposable
             {
                 case NIN_SELECT:
                 case NIN_KEYSELECT:
+                case NIN_BALLOONUSERCLICK: // 点气泡（比如“有新版本”）也打开窗口
                     Activated?.Invoke();
                     break;
                 case WM_CONTEXTMENU:
@@ -146,7 +150,11 @@ internal sealed partial class TrayIcon : IDisposable
         if (message == WM_QUERYENDSESSION) return 1; // 同意关机
         if (message == WM_ENDSESSION)
         {
-            if (wParam != IntPtr.Zero) SessionEnding?.Invoke();
+            if (wParam == IntPtr.Zero) return IntPtr.Zero;
+            // ENDSESSION_CLOSEAPP 不是关机：安装程序或重启管理器要关掉 EarPair 来替换文件。它们会等进程自己退出，
+            // 不退出就一直等到超时（安装界面看起来卡住），所以要真的退出（退出时照样停止发送、恢复本机声音）
+            if ((lParam.ToInt64() & ENDSESSION_CLOSEAPP) != 0) CloseRequested?.Invoke();
+            else SessionEnding?.Invoke();
             return IntPtr.Zero;
         }
         if (message == WM_SETTINGCHANGE && lParam != IntPtr.Zero &&
@@ -257,9 +265,11 @@ internal sealed partial class TrayIcon : IDisposable
     private const uint NIF_MESSAGE = 0x1, NIF_ICON = 0x2, NIF_TIP = 0x4, NIF_INFO = 0x10, NIF_SHOWTIP = 0x80;
     private const uint NIIF_NONE = 0x0, NIIF_RESPECT_QUIET_TIME = 0x80;
     private const uint NOTIFYICON_VERSION_4 = 4;
-    private const uint NIN_SELECT = 0x400, NIN_KEYSELECT = 0x401;
+    private const uint NIN_SELECT = 0x400, NIN_KEYSELECT = 0x401, NIN_BALLOONUSERCLICK = 0x405;
     private const uint WM_NULL = 0x0, WM_QUERYENDSESSION = 0x11, WM_ENDSESSION = 0x16, WM_SETTINGCHANGE = 0x1A,
                        WM_CONTEXTMENU = 0x7B;
+    /// <summary>WM_QUERYENDSESSION / WM_ENDSESSION 的 lParam：只要求关闭这个程序，不是关机或注销</summary>
+    private const long ENDSESSION_CLOSEAPP = 0x1;
     private const uint MF_STRING = 0x0, MF_GRAYED = 0x1, MF_CHECKED = 0x8, MF_POPUP = 0x10, MF_SEPARATOR = 0x800;
     private const uint TPM_RETURNCMD = 0x100, TPM_RIGHTBUTTON = 0x2, TPM_BOTTOMALIGN = 0x20;
     private const uint IMAGE_ICON = 1, LR_LOADFROMFILE = 0x10;

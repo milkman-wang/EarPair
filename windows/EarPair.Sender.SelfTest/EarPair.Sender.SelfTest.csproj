@@ -20,6 +20,7 @@
     <Compile Include="../EarPair.Sender.Core/UdpSender.cs" Link="Shared/UdpSender.cs" />
     <Compile Include="../EarPair.Sender.Core/ControlPacket.cs" Link="Shared/ControlPacket.cs" />
     <Compile Include="../EarPair.App/Services/AddressPicker.cs" Link="Shared/App/AddressPicker.cs" />
+    <Compile Include="../EarPair.App/Services/ReleaseInfo.cs" Link="Shared/App/ReleaseInfo.cs" />
   </ItemGroup>
 
   <ItemGroup>

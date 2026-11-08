@@ -150,6 +150,53 @@
     <value>{0}：{1} 到 {2}，再到 {3}</value>
   </data>
 
+  <!-- 更新 -->
+  <data name="CheckForUpdates" xml:space="preserve">
+    <value>检查更新</value>
+  </data>
+  <data name="CheckingForUpdates" xml:space="preserve">
+    <value>正在检查更新…</value>
+  </data>
+  <data name="UpdateAvailableTitle" xml:space="preserve">
+    <value>EarPair {0} 已发布</value>
+  </data>
+  <data name="UpdateAvailableText" xml:space="preserve">
+    <value>更新时 EarPair 会关闭，装好后自动重新打开</value>
+  </data>
+  <data name="UpdateNow" xml:space="preserve">
+    <value>更新</value>
+  </data>
+  <data name="UpdateDownloading" xml:space="preserve">
+    <value>正在下载 EarPair {0}… {1}%</value>
+  </data>
+  <data name="UpdateInstalling" xml:space="preserve">
+    <value>正在安装更新，装好后 EarPair 会自动重新打开</value>
+  </data>
+  <data name="UpdateFailed" xml:space="preserve">
+    <value>更新失败：{0}</value>
+  </data>
+  <data name="OpenDownloadPage" xml:space="preserve">
+    <value>打开下载页</value>
+  </data>
+  <data name="UpToDate" xml:space="preserve">
+    <value>EarPair {0} 已是最新版本</value>
+  </data>
+  <data name="UpdateCheckFailed" xml:space="preserve">
+    <value>检查更新失败：{0}</value>
+  </data>
+  <data name="UpdateErrorBadFeed" xml:space="preserve">
+    <value>读不懂发布信息</value>
+  </data>
+  <data name="UpdateErrorChecksum" xml:space="preserve">
+    <value>下载的文件不完整或已损坏</value>
+  </data>
+  <data name="UpdateErrorTimeout" xml:space="preserve">
+    <value>超时</value>
+  </data>
+  <data name="NotChecked" xml:space="preserve">
+    <value>未校验</value>
+  </data>
+
   <data name="TrayNoMac" xml:space="preserve">
     <value>还没有选择 Mac</value>
   </data>
@@ -170,6 +217,15 @@
   </data>
   <data name="BackgroundText" xml:space="preserve">
     <value>点任务栏上的耳朵图标可以再打开</value>
+  </data>
+  <data name="TrayUpdate" xml:space="preserve">
+    <value>更新到 {0}</value>
+  </data>
+  <data name="UpdateBalloonTitle" xml:space="preserve">
+    <value>EarPair 有新版本</value>
+  </data>
+  <data name="UpdateBalloonText" xml:space="preserve">
+    <value>{0} 已发布，打开 EarPair 就能更新</value>
   </data>
 
   <data name="LogStarting" xml:space="preserve">
@@ -198,6 +254,30 @@
   </data>
   <data name="LogSessionEnding" xml:space="preserve">
     <value>关机或注销：停止发送，恢复本机声音</value>
+  </data>
+  <data name="LogCloseRequested" xml:space="preserve">
+    <value>安装程序要求关闭 EarPair</value>
+  </data>
+  <data name="LogUpToDate" xml:space="preserve">
+    <value>检查更新：当前 {0}，最新发布 {1}</value>
+  </data>
+  <data name="LogUpdateNoInstaller" xml:space="preserve">
+    <value>{0} 还没有 {1} 的安装包</value>
+  </data>
+  <data name="LogUpdateAvailable" xml:space="preserve">
+    <value>有新版本：{0} → {1}</value>
+  </data>
+  <data name="LogUpdateCheckFailed" xml:space="preserve">
+    <value>检查更新失败：{0}</value>
+  </data>
+  <data name="LogUpdateDownloaded" xml:space="preserve">
+    <value>已下载 {0}（{1} 字节，SHA-256 {2}）</value>
+  </data>
+  <data name="LogUpdateInstalling" xml:space="preserve">
+    <value>启动 {0} 的安装程序，退出</value>
+  </data>
+  <data name="LogUpdateFailed" xml:space="preserve">
+    <value>更新失败：{0}</value>
   </data>
   <data name="LogExit" xml:space="preserve">
     <value>退出</value>
