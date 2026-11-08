@@ -139,6 +139,10 @@ public final class SpatialTracker: @unchecked Sendable {
         /// 正在校准时的步骤和这一步的进度
         public var calibration: SpatialCalibration.Step?
         public var calibrationProgress: Double
+        /// 常用位置离校准方向多少度（左为正），和刚动过身体、正在加快调整
+        public var naturalMac: Double
+        public var naturalSender: Double
+        public var adjustingPosture: Bool
     }
 
     /// 存下来、下次打开接着用的：夹角、常用哪台、注视地图
@@ -161,6 +165,9 @@ public final class SpatialTracker: @unchecked Sendable {
     private var active = false
     private var awayGain = 0.5
     private var lastPlaced = -Double.infinity
+    private var lastYaw = 0.0
+    /// 最近一次校准的两个方向，换算成当时读数里的 yaw（度），调试记录用
+    public private(set) var lastCalibrationYaws: (mac: Double, sender: Double)?
 
     /// 头部数据的队列上调用：发送端和 Mac 两组虚拟音箱摆在哪。只在 active 时调用，最多 60 次/秒
     public var onPlace: ((_ sender: SpatialPlacement, _ mac: SpatialPlacement) -> Void)?
@@ -180,9 +187,11 @@ public final class SpatialTracker: @unchecked Sendable {
     public func add(_ sample: HeadTracker.Sample) {
         var placement: (sender: SpatialPlacement, mac: SpatialPlacement)?
         lock.withLock {
+            lastYaw = sample.yaw
             let reconnects = anchors.reconnects
             anchors.add(ScreenAnchors.Sample(time: sample.time, timestamp: sample.timestamp, yaw: sample.yaw,
-                                             speed: sample.speed, verticalRate: sample.verticalRate))
+                                             speed: sample.speed, verticalRate: sample.verticalRate,
+                                             acceleration: sample.acceleration, pitch: sample.pitch))
             if var c = calibration {
                 if anchors.reconnects != reconnects { c.restart() }
                 c.feed(time: sample.time, heading: anchors.heading, speed: sample.speed)
@@ -237,6 +246,7 @@ public final class SpatialTracker: @unchecked Sendable {
     public func commitCalibration() -> Saved? {
         lock.withLock {
             guard case .done(let mac, let sender)? = calibration?.step else { return nil }
+            lastCalibrationYaws = (lastYaw + mac - anchors.heading, lastYaw + sender - anchors.heading)
             anchors.calibrate(macHeading: mac, windowsHeading: sender)
             calibrated = true
             calibration = nil
@@ -254,7 +264,8 @@ public final class SpatialTracker: @unchecked Sendable {
             Status(calibrated: calibrated, phase: anchors.phase, facing: anchors.facing,
                    macRelative: anchors.relative(.mac), senderRelative: anchors.relative(.windows),
                    angle: anchors.calibratedAngle, calibration: calibration?.step,
-                   calibrationProgress: calibration?.progress ?? 0)
+                   calibrationProgress: calibration?.progress ?? 0, naturalMac: anchors.naturalOffset(.mac),
+                   naturalSender: anchors.naturalOffset(.windows), adjustingPosture: anchors.adjustingPosture)
         }
     }
 

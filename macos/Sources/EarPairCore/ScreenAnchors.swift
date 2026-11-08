@@ -20,6 +20,14 @@ import Foundation
 /// - 重新连上：读数归零，断开期间头怎么动的也不知道，每来一次注视都在一圈里重新对位（夹角在 ±flexRange 里一起找，
 ///   离断开前的夹角越远扣分越多）。最好的位置明显比第二好的强、而且注视铺开了 20° 以上，才开始跟踪（或者已经看了 90 秒）。
 ///   只看过一处时，它会被放到地图上最常看的地方：宽屏上常看的地方不止一处，这时可能放错，看过第二处就会改过来。
+/// - 常用位置：平时看每台时头停在哪（自然看过去时头往往比校准时刻意正对少转一些，剩下的靠眼睛）。
+///   侧面那台：看最近几分钟看它时头离它现在的位置还差多少，按差值挪（每分钟最多 naturalRate 度，一两分钟到位）；
+///   按“还差多少”挪，侧面那台单独挪（夹角变化）已经挪过的部分会自动扣掉，不会重复。
+///   常用的那台（可能是宽屏，左右两半都在用）：用地图上长期看出来的重心，慢慢挪（每分钟 3°），不跟着最近看哪半边来回摆。
+///   自然看着哪台，它的声音就在正前方。下次打开时先用地图上看出来的常用位置。
+///   身体动了一下（头几乎不转时加速度明显，多半是换了坐姿）之后一阵子，侧面那台跟得更快。
+///   （试过用看同一台时俯仰的变化判断换坐姿：模拟里误判多，反而把侧面那台拉偏，没有用。）
+/// - 低头看手机、键盘（比平时看屏幕时低 lookDown 度以上）的注视不算看屏幕，不拿来对位、也不学。
 /// - 学习：跟踪稳定后把注视记进地图（Windows 那半扣掉夹角的变化），地图按几小时慢慢衰减，可以存下来下次接着用；校准时从头学。
 ///   校准（或者点“对准”）之后的 trustWindow 秒里方向不动、只学地图：那时方向是准的，先把你常看的几处按真实位置学下来；
 ///   不然一边对位一边学，方向会被“还没学过的常看位置”慢慢拽偏，地图又按偏了的位置学进去，越来越偏。
@@ -49,13 +57,20 @@ public struct ScreenAnchors: Sendable {
         public var speed: Double
         /// 绕竖直轴的角速度（度/秒，左转为正）；没有重力数据时为 nil
         public var verticalRate: Double?
+        /// 头的加速度大小（g，已去掉重力）；没有时为 nil
+        public var acceleration: Double?
+        /// 俯仰（度）；只看它和平时看屏幕时差多少，用来认出低头看手机、键盘。没有时为 nil
+        public var pitch: Double?
 
-        public init(time: Double, timestamp: Double, yaw: Double, speed: Double, verticalRate: Double?) {
+        public init(time: Double, timestamp: Double, yaw: Double, speed: Double, verticalRate: Double?,
+                    acceleration: Double? = nil, pitch: Double? = nil) {
             self.time = time
             self.timestamp = timestamp
             self.yaw = yaw
             self.speed = speed
             self.verticalRate = verticalRate
+            self.acceleration = acceleration
+            self.pitch = pitch
         }
     }
 
@@ -101,6 +116,24 @@ public struct ScreenAnchors: Sendable {
         public var trustWindow = 300.0
         /// 头部数据停了又开，停的时间在这以内（秒）就当头没动、把前后接上；更久就重新找
         public var bridgeLimit = 120.0
+        /// 常用位置离校准的方向最多多少度；侧面那台每分钟最多挪 naturalRate 度、最近至少看了它 naturalEvidence 秒才挪；
+        /// 常用的那台每分钟最多挪 naturalMainRate 度
+        public var naturalRange = 15.0
+        public var naturalRate = 10.0
+        public var naturalEvidence = 4.0
+        public var naturalMainRate = 3.0
+        /// 身体动了一下：头几乎不转时加速度超过 bumpAcceleration（g）持续 0.3 秒（平时头不转时一般 0.025 g）。
+        /// 之后 postureWindow 秒里侧面那台跟得快 postureBoost 倍
+        public var bumpAcceleration = 0.08
+        /// 比平时看屏幕时低头 lookDown 度以上的注视（看手机、键盘、桌上）不算看屏幕：不拿来对位，也不学。
+        /// 实测看手机比看显示器低约 32°；MacBook 比显示器低 15° 左右，靠椅背前后还会变 8° 左右，门槛要在两者之间
+        public var lookDown = 27.0
+        /// 重新找方向时，新的位置要比现在的好这么多（对数似然）才换过去，免得看一眼别处就整体挪走
+        public var acquireSwitch = 5.0
+        /// 重新找方向时，在现在的位置附近（10° 以内、夹角变化 8° 以内）的小调整慢慢挪：每秒注视最多这么多度
+        public var acquireLocalRate = 2.0
+        public var postureWindow = 90.0
+        public var postureBoost = 3.0
 
         public init() {}
     }
@@ -126,6 +159,15 @@ public struct ScreenAnchors: Sendable {
     private var mac: Double?
     private var last: Sample?
     private var frameMayReset = false
+    /// 常用位置：两台的声音放在校准方向再偏多少度（左为正），正在慢慢挪向从地图看出来的目标
+    private var natural = (mac: 0.0, windows: 0.0)
+    private var lastNatural = -Double.infinity
+    /// 平时看屏幕时的俯仰（只用不低头的注视慢慢学）；这一块注视的俯仰
+    private var screenPitch: Double?
+    private var chunkPitches: [Double] = []
+    /// 身体动了一下之后到这个时间之前，侧面那台跟得更快
+    private var postureUntil = -Double.infinity
+    private var bumpSince: Double?
     /// 头部数据刚重新开始：下一个样本的读数是从头算的
     private var pendingBridge = false
     private var fixationStart: Double?
@@ -174,19 +216,30 @@ public struct ScreenAnchors: Sendable {
             self.map = Self.seeds(angle: angle, main: preferred)
         }
         refreshDensity()
+        natural = naturalTargets()  // 存下来的地图：先用它看出来的常用位置
     }
 
     // MARK: - 读
 
     /// 某台在当前读数里的方向（度，-180…180）；还不知道时为 nil
     public func direction(of screen: Screen) -> Double? {
-        guard let anchor = anchor(screen), let last else { return nil }
+        guard let anchor = placed(screen), let last else { return nil }
         return Self.wrap(anchor - heading + last.yaw)
     }
 
-    /// 某台相对头现在朝向的方向（度，左为正）
+    /// 某台相对头现在朝向的方向（度，左为正）：声音就放在这里（校准的方向，再挪向常用位置）
     public func relative(_ screen: Screen) -> Double? {
-        anchor(screen).map { Self.wrap($0 - heading) }
+        placed(screen).map { Self.wrap($0 - heading) }
+    }
+
+    /// 常用位置离校准的方向多少度（左为正）
+    public func naturalOffset(_ screen: Screen) -> Double {
+        screen == .mac ? natural.mac : natural.windows
+    }
+
+    /// 刚动过身体（多半换了坐姿），侧面那台正在跟得更快
+    public var adjustingPosture: Bool {
+        (last?.time ?? -Double.infinity) < postureUntil
     }
 
     /// 头现在朝着哪台；两台都不靠近时为 nil
@@ -247,6 +300,7 @@ public struct ScreenAnchors: Sendable {
         pendingLearn = []
         densityDirty = true
         refreshDensity()
+        natural = (0, 0)
         startTracking(learnNow: true)
         frozenUntil = (last?.time ?? 0) + configuration.trustWindow
         manual = true
@@ -256,13 +310,16 @@ public struct ScreenAnchors: Sendable {
     /// 和原来的估计差 10° 以上时，说明之前跟错了，错的时候学进地图的也不可信：地图从头学
     public mutating func align(_ screen: Screen) {
         guard last != nil else { return }
-        let aligned = screen == .mac ? heading : heading - angle
+        // 用户是自然地看着它点的：让它的声音（校准方向 + 常用位置的偏移）正好在正前方
+        var aligned = screen == .mac ? heading - natural.mac : heading - angle - natural.windows
         if let old = mac, abs(Self.wrap(aligned - old)) > 10 {
             map = Self.seeds(angle: calibratedAngle, main: knowsMainScreen ? mainScreen : preferred)
             learned = 0
             pendingLearn = []
             densityDirty = true
             refreshDensity()
+            natural = (0, 0)
+            aligned = screen == .mac ? heading : heading - angle
         }
         mac = aligned
         startTracking(learnNow: true)
@@ -311,6 +368,13 @@ public struct ScreenAnchors: Sendable {
             return nil
         }
         frameMayReset = false
+        if let a = sample.acceleration, a > configuration.bumpAcceleration, sample.speed < 30 {
+            let since = bumpSince ?? sample.time
+            bumpSince = since
+            if sample.time - since >= 0.3 { postureUntil = sample.time + configuration.postureWindow }
+        } else {
+            bumpSince = nil
+        }
         let step = Self.wrap(sample.yaw - last.yaw)
         let dt = sample.timestamp - last.timestamp
         let calm = last.speed < configuration.resetSpeed && sample.speed < configuration.resetSpeed
@@ -334,6 +398,10 @@ public struct ScreenAnchors: Sendable {
 
     private func anchor(_ screen: Screen) -> Double? {
         mac.map { screen == .mac ? $0 : $0 + angle }
+    }
+
+    private func placed(_ screen: Screen) -> Double? {
+        anchor(screen).map { $0 + naturalOffset(screen) }
     }
 
     private var recentSeconds: Double {
@@ -360,6 +428,7 @@ public struct ScreenAnchors: Sendable {
     private mutating func startTracking(learnNow: Bool) {
         phase = .tracking
         let now = last?.time ?? 0
+        lastNatural = now  // 常用位置从现在起按时间慢慢挪，不会一开始就挪满一分钟的量
         stableSince = learnNow ? now - configuration.learnAfter : now
         lastLocal = now
         lastGlobal = now
@@ -372,26 +441,41 @@ public struct ScreenAnchors: Sendable {
             defer {
                 fixationStart = nil
                 chunkHeadings = []
+                chunkPitches = []
             }
             guard let start = fixationStart, previous.time - start >= configuration.fixationChunk,
                   previous.time - chunkStart >= 0.3, !chunkHeadings.isEmpty else { return nil }
-            return observe(Self.median(chunkHeadings), seconds: previous.time - chunkStart, at: previous.time)
+            return observe(Self.median(chunkHeadings), pitch: chunkPitches.isEmpty ? nil : Self.median(chunkPitches),
+                           seconds: previous.time - chunkStart, at: previous.time)
         }
         if fixationStart == nil {
             fixationStart = sample.time
             chunkStart = sample.time
             chunkHeadings = []
+            chunkPitches = []
         }
         chunkHeadings.append(heading)
+        if let pitch = sample.pitch { chunkPitches.append(pitch) }
         guard sample.time - chunkStart >= configuration.fixationChunk else { return nil }
-        let fixation = observe(Self.median(chunkHeadings), seconds: sample.time - chunkStart, at: sample.time)
+        let fixation = observe(Self.median(chunkHeadings), pitch: chunkPitches.isEmpty ? nil : Self.median(chunkPitches),
+                               seconds: sample.time - chunkStart, at: sample.time)
         chunkStart = sample.time
         chunkHeadings = []
+        chunkPitches = []
         return fixation
     }
 
-    private mutating func observe(_ heading: Double, seconds: Double, at time: Double) -> Fixation {
+    private mutating func observe(_ heading: Double, pitch: Double? = nil, seconds: Double,
+                                  at time: Double) -> Fixation {
         refreshDensity()
+        if let pitch {
+            // 平时看屏幕的俯仰：只用不低头的注视学（时间常数约 1 分钟）
+            if let usual = screenPitch, pitch < usual - configuration.lookDown {
+                return Fixation(time: time, heading: heading, seconds: seconds, screen: nil)
+            }
+            let usual = screenPitch ?? pitch
+            screenPitch = usual + (pitch - usual) * min(1, seconds / 60)
+        }
         recent.append(Fixation(time: time, heading: heading, seconds: seconds, screen: nil))
         recent.removeAll { time - $0.time > configuration.recentMemory }
         switch phase {
@@ -399,8 +483,25 @@ public struct ScreenAnchors: Sendable {
             // 在一圈里找最能对上地图的位置；只看过一处时，它会落在地图上最常看的地方
             phase = .acquiring
             let best = alignAround(heading, prior: deltaPrior)
-            mac = best.x
-            delta = best.d
+            if let m = mac {
+                // 已经有一个位置：完全不同的摆法要明显更好才跳过去（看一眼别处不至于整体挪走）；
+                // 附近的小调整慢慢挪，不让声音一下一下地跳
+                let current = likelihood(m, delta) - flexPenalty(delta, prior: deltaPrior)
+                let far = abs(Self.wrap(best.x - m)) > 10 || abs(best.d - delta) > 8
+                if far {
+                    if best.score >= current + configuration.acquireSwitch {
+                        mac = best.x
+                        delta = best.d
+                    }
+                } else if best.score > current {
+                    let step = configuration.acquireLocalRate * seconds
+                    mac = m + max(-step, min(step, Self.wrap(best.x - m)))
+                    delta += max(-step, min(step, best.d - delta))
+                }
+            } else {
+                mac = best.x
+                delta = best.d
+            }
             acquiredSeconds += seconds
             if acquiredSeconds >= configuration.acquireSeconds
                 && ((best.margin >= 6 && spread >= 20) || acquiredSeconds >= configuration.acquireLimit) {
@@ -408,6 +509,7 @@ public struct ScreenAnchors: Sendable {
             }
         case .tracking:
             follow(heading, seconds: seconds, at: time)
+            updateNatural(at: time)
         }
         return Fixation(time: time, heading: heading, seconds: seconds,
                         screen: mac.flatMap { classify(Self.wrap(heading - $0)) })
@@ -467,8 +569,9 @@ public struct ScreenAnchors: Sendable {
         let side: Screen = mainScreen == .windows ? .mac : .windows
         var onSide = 0.0
         for f in recent where classify(Self.wrap(f.heading - m)) == side { onSide += f.seconds }
-        guard onSide >= configuration.flexEvidence else { return }
-        let limit = configuration.maxFlex / 60 * elapsed
+        let boosted = adjustingPosture
+        guard onSide >= configuration.flexEvidence * (boosted ? 0.5 : 1) else { return }
+        let limit = configuration.maxFlex * (boosted ? configuration.postureBoost : 1) / 60 * elapsed
         let base = likelihood(m, delta)
         // 在整个可变范围里找侧面那台最合适的位置（靠在椅子上能挪 10–15°），再按速度限制往那边挪
         var best = (shift: 0.0, score: base)
@@ -487,6 +590,54 @@ public struct ScreenAnchors: Sendable {
         } else {
             delta += shift
         }
+    }
+
+    // MARK: - 常用位置
+
+    /// 常用位置每 10 秒挪一点：侧面那台按最近看它时还差多少，常用的那台按地图的重心
+    private mutating func updateNatural(at time: Double) {
+        guard time - lastNatural >= 10, let m = mac else { return }
+        let elapsed = min(time - lastNatural, 60)
+        lastNatural = time
+        let main = mainScreen
+        let side: Screen = main == .mac ? .windows : .mac
+        let range = configuration.naturalRange
+        func move(_ screen: Screen, to target: Double, rate: Double) {
+            let step = rate / 60 * elapsed
+            let current = naturalOffset(screen)
+            let next = current + max(-step, min(step, max(-range, min(range, target)) - current))
+            if screen == .mac { natural.mac = next } else { natural.windows = next }
+        }
+        // 侧面那台：最近看它的注视离它现在放的位置平均差多少（离得太远的不算）
+        if let placedSide = placed(side) {
+            var seconds = 0.0, sum = 0.0
+            for f in recent where classify(Self.wrap(f.heading - m)) == side {
+                let gap = Self.wrap(f.heading - placedSide)
+                guard abs(gap) <= 25 else { continue }
+                seconds += f.seconds
+                sum += gap * f.seconds
+            }
+            if seconds >= configuration.naturalEvidence {
+                move(side, to: naturalOffset(side) + sum / seconds, rate: configuration.naturalRate)
+            }
+        }
+        let target = naturalTargets()
+        move(main, to: main == .mac ? target.mac : target.windows, rate: configuration.naturalMainRate)
+    }
+
+    /// 地图上每台那一半在它校准方向 ±25° 里的重心（地图坐标），离校准方向最多 naturalRange 度。打开时用它当起点
+    private func naturalTargets() -> (mac: Double, windows: Double) {
+        func centroid(_ part: [Double], around center: Double) -> Double {
+            var sum = 0.0, weight = 0.0
+            for d in -25...25 {
+                let v = Self.sample(part, center + Double(d))
+                sum += v * Double(d)
+                weight += v
+            }
+            guard weight > 0 else { return 0 }
+            return max(-configuration.naturalRange, min(configuration.naturalRange, sum / weight))
+        }
+        return (centroid(macPart, around: 0), centroid(windowsPart, around: calibratedAngle))
     }
 
     // MARK: - 地图

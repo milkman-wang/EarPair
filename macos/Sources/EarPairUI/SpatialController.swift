@@ -45,6 +45,14 @@ public final class SpatialController: ObservableObject {
         }
     }
 
+    /// 调试记录：头部数据和每秒的判断写进 ~/Library/Logs/EarPair，可以拿去回放对比
+    @Published public var recording: Bool {
+        didSet {
+            save(recording, Keys.recording)
+            updateRecording()
+        }
+    }
+
     @Published public private(set) var mode: SpatialMode = .off
     /// 截取 Mac 声音的权限被拒绝了
     @Published public private(set) var macPermissionDenied = false
@@ -68,6 +76,7 @@ public final class SpatialController: ObservableObject {
         static let enabled = "spatialEnabled"
         static let awayVolume = "spatialAwayVolume"
         static let includeMac = "spatialIncludeMac"
+        static let recording = "spatialRecording"
         static let angle = "spatialAngle"
         static let main = "spatialMainScreen"
         static let map = "spatialGazeMap"
@@ -88,6 +97,7 @@ public final class SpatialController: ObservableObject {
     private var ticks = 0
     private var terminationObserver: NSObjectProtocol?
     private var keepHeadUntil = -Double.infinity
+    private let recorder = SpatialRecorder()
     private var macPermission = SystemAudioPermission.Status.unknown
     private var askingPermission = false
     /// 问过权限、系统说可以，但查不到状态（私有函数不在了）：照常截取，让系统自己处理
@@ -99,6 +109,7 @@ public final class SpatialController: ObservableObject {
         enabled = defaults.bool(forKey: Keys.enabled)
         awayVolume = defaults.object(forKey: Keys.awayVolume) as? Double ?? 0.5
         includeMac = defaults.object(forKey: Keys.includeMac) as? Bool ?? true
+        recording = defaults.bool(forKey: Keys.recording)
         if #available(macOS 14.2, *) { macSoundSupported = true } else { macSoundSupported = false }
         var saved: SpatialTracker.Saved?
         if let angle = defaults.object(forKey: Keys.angle) as? Double {
@@ -108,6 +119,7 @@ public final class SpatialController: ObservableObject {
         tracker = SpatialTracker(saved: saved)
         angle = saved?.angle
         head = HeadTracker()
+        head?.recorder = recorder
         self.output = output
         isLive = true
         tracker.setAwayGain(awayVolume)
@@ -125,6 +137,7 @@ public final class SpatialController: ObservableObject {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.persist() }
         }
+        updateRecording()
         refresh()
         Task { [weak self] in
             while !Task.isCancelled {
@@ -141,6 +154,7 @@ public final class SpatialController: ObservableObject {
                 includeMac: Bool = true, macPermissionDenied: Bool = false) {
         self.enabled = enabled
         self.includeMac = includeMac
+        recording = false
         self.macPermissionDenied = macPermissionDenied
         macSoundSupported = true
         awayVolume = 0.5
@@ -193,6 +207,7 @@ public final class SpatialController: ObservableObject {
     }
 
     public func beginSetup() {
+        recorder.event("calib_start")
         tracker.beginCalibration()
         setup = .mac
         setupProgress = 0
@@ -200,6 +215,7 @@ public final class SpatialController: ObservableObject {
     }
 
     public func cancelSetup() {
+        recorder.event("calib_cancel")
         tracker.cancelCalibration()
         setup = nil
         refresh()
@@ -208,6 +224,11 @@ public final class SpatialController: ObservableObject {
     /// 校准记下了两台：保存
     public func saveSetup() {
         guard let saved = tracker.commitCalibration() else { return }
+        if let yaws = tracker.lastCalibrationYaws {
+            // 和 HeadProbe 一样用弧度，回放工具直接认
+            recorder.event("calib_done", ["macYaw": yaws.mac * .pi / 180, "winYaw": yaws.sender * .pi / 180,
+                                          "angle": saved.angle])
+        }
         angle = saved.angle
         setup = nil
         enabled = true
@@ -217,6 +238,7 @@ public final class SpatialController: ObservableObject {
 
     /// 看着 Mac 时点：把 Mac 的方向定在现在的朝向
     public func recenter() {
+        recorder.event("anchors_align", ["screen": "mac"])
         tracker.recenter()
         NSSound(named: "Tink")?.play()
     }
@@ -241,6 +263,7 @@ public final class SpatialController: ObservableObject {
         live.update(macRelative: status.macRelative, senderRelative: status.senderRelative)
         if setup != nil { updateSetup(status) }
         if ticks % 5 == 0 { refresh() }
+        if ticks % 10 == 0 { recordState(status) }
         // 被拒绝时隔一会儿再查：用户可能去系统设置里打开了
         if ticks % 50 == 0, macPermission == .denied {
             macPermission = SystemAudioPermission.status
@@ -298,6 +321,8 @@ public final class SpatialController: ObservableObject {
         if next != mode {
             if next == .active { macFailure = nil }
             mode = next
+            recorder.event("mode", ["mode": Self.describe(next), "link": "\(linkState)",
+                                    "output": outputDevice?.name ?? NSNull()])
         }
         tracker.setActive(next == .active)
         // 先定要不要截取，再切空间音频：打开时只重建一次音频图
@@ -332,6 +357,51 @@ public final class SpatialController: ObservableObject {
             if granted { permissionAssumed = true } else { macPermission = .denied }
         }
         refresh()
+    }
+
+    /// 打开或关掉调试记录
+    private func updateRecording() {
+        guard isLive else { return }
+        if recording {
+            guard !recorder.isRecording, (try? recorder.start()) != nil else { return }
+            let status = tracker.status()
+            recorder.event("session", [
+                "app": ReceiverController.appVersion, "enabled": enabled, "includeMac": includeMac,
+                "awayVolume": awayVolume, "savedAngle": status.calibrated ? status.angle : NSNull(),
+                "mode": Self.describe(mode),
+            ])
+        } else {
+            recorder.stop()
+        }
+    }
+
+    /// 每秒记一次判断：两台相对头的方向、常用位置、在看哪台
+    private func recordState(_ status: SpatialTracker.Status) {
+        guard recorder.isRecording else { return }
+        func round1(_ value: Double?) -> Any { value.map { ($0 * 10).rounded() / 10 } ?? NSNull() }
+        recorder.event("anchors", [
+            "phase": "\(status.phase)", "facing": status.facing.map { "\($0)" } ?? NSNull(),
+            "mac": round1(status.macRelative), "windows": round1(status.senderRelative),
+            "naturalMac": round1(status.naturalMac), "naturalWindows": round1(status.naturalSender),
+            "adjusting": status.adjustingPosture, "mode": Self.describe(mode), "awayVolume": (awayVolume * 100).rounded() / 100,
+            "capturingMac": output?.isCapturingMac ?? false,
+        ])
+    }
+
+    private static func describe(_ mode: SpatialMode) -> String {
+        switch mode {
+        case .off: return "off"
+        case .needsSetup: return "needsSetup"
+        case .noPermission: return "noPermission"
+        case .noHeadphones: return "noHeadphones"
+        case .waitingForSender: return "waitingForSender"
+        case .active: return "active"
+        }
+    }
+
+    public func showRecordings() {
+        try? FileManager.default.createDirectory(at: SpatialRecorder.root, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(recorder.folder ?? SpatialRecorder.root)
     }
 
     private func persist() {

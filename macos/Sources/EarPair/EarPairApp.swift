@@ -26,6 +26,7 @@ struct EarPairApp: App {
         .commands {
             CommandGroup(replacing: .help) {}
             UpdateCommands(updates: controller.updates)
+            SpatialCommands(spatial: controller.spatial)
         }
 
         MenuBarScene(controller: controller)
