@@ -10,6 +10,7 @@
 "Mute" = "静音";
 "Unmute" = "取消静音";
 "Auto level" = "音量平衡";
+"Auto buffer" = "自动缓冲";
 "Open EarPair" = "打开 EarPair";
 "Quit EarPair" = "退出 EarPair";
 

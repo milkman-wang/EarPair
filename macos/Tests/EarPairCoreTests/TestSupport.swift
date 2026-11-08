@@ -60,9 +60,10 @@ extension ReceiverCore {
     }
 }
 
-func makeCore(driftCompensation: Bool = false) -> ReceiverCore {
+func makeCore(driftCompensation: Bool = false, autoBuffer: Bool = false) -> ReceiverCore {
     var config = ReceiverCore.Configuration()
     config.driftCompensation = driftCompensation
+    config.autoBuffer = autoBuffer
     let core = ReceiverCore(configuration: config)
     core.setOutputSampleRate(48_000)
     return core

@@ -10,7 +10,7 @@ How to build EarPair from source, run the tests, and find your way around the co
  Windows PC                                          Mac
 ┌──────────────────────────┐   UDP 47800    ┌──────────────────────────────────┐
 │ WASAPI loopback capture  │  audio (EARP)  │ reorder, conceal losses          │
-│ 16-bit stereo PCM        │ ─────────────▶ │ 60 ms jitter buffer, drift fix   │
+│ 16-bit stereo PCM        │ ─────────────▶ │ auto jitter buffer, drift fix    │
 │ 5 ms packets             │                │ loudness leveling, limiter       │
 │                          │ ◀───────────── │ AVAudioEngine → system mixer     │
 │ tray app / CLI sender    │  status (EARC) │ → AirPods (or any output)        │
@@ -20,7 +20,7 @@ How to build EarPair from source, run the tests, and find your way around the co
 ```
 
 - **Audio**: uncompressed 16-bit stereo PCM, 240 frames per packet (5 ms at 48 kHz), about 1.6 Mbit/s. Format and test vectors: [protocol/audio-packet.md](../protocol/audio-packet.md).
-- **Receiver**: puts packets back in order, fills gaps with silence, fading out and back in around them (no clicks), keeps a 60 ms buffer, resamples to absorb the clock difference between the two sound cards, and pulls latency back after Wi‑Fi hiccups. Playback goes through AVAudioEngine, so macOS mixes it with the Mac's own audio.
+- **Receiver**: puts packets back in order, fills gaps with silence, fading out and back in around them (no clicks), keeps a buffer sized to the network (20–150 ms, picked from the last half minute of packet arrivals; a fixed size can be chosen instead), resamples to absorb the clock difference between the two sound cards, and pulls latency back after Wi‑Fi hiccups. Playback goes through AVAudioEngine, so macOS mixes it with the Mac's own audio.
 - **Control channel** on the same port: HELLO (sender name and device type; a standby flag while the PC is silent, when no audio packets are sent), STATUS once per second (playing, busy, muted, output device), BYE when the sender stops, with the reason (stopped, network or audio device). After a network drop the PC keeps probing and the Mac keeps pinging the PC for a minute, so the stream comes back as soon as the network does. Spec: [protocol/control-packet.md](../protocol/control-packet.md).
 - **Discovery**: the Mac advertises `_earpair._udp` over Bonjour; Windows finds it with the DNS-SD support built into Windows.
 

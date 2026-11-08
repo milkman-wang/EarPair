@@ -10,7 +10,7 @@
  Windows PC                                          Mac
 ┌──────────────────────────┐   UDP 47800    ┌──────────────────────────────────┐
 │ WASAPI loopback capture  │  audio (EARP)  │ reorder, conceal losses          │
-│ 16-bit stereo PCM        │ ─────────────▶ │ 60 ms jitter buffer, drift fix   │
+│ 16-bit stereo PCM        │ ─────────────▶ │ auto jitter buffer, drift fix    │
 │ 5 ms packets             │                │ loudness leveling, limiter       │
 │                          │ ◀───────────── │ AVAudioEngine → system mixer     │
 │ tray app / CLI sender    │  status (EARC) │ → AirPods (or any output)        │
@@ -20,7 +20,7 @@
 ```
 
 - **音频**：不压缩的 16 位立体声 PCM，每包 240 帧（48 kHz 下 5 ms），约 1.6 Mbit/s。格式和测试向量见 [protocol/audio-packet.md](../protocol/audio-packet.md)。
-- **接收端**：把乱序的包排好，丢包的地方补上静音，前后各做一次很短的淡出淡入（不会爆音），保持 60 ms 缓冲，通过变速重采样补偿两块声卡的时钟差，Wi‑Fi 卡顿后把延迟拉回来。用 AVAudioEngine 播放，由 macOS 把它和 Mac 自己的声音混在一起。
+- **接收端**：把乱序的包排好，丢包的地方补上静音，前后各做一次很短的淡出淡入（不会爆音），按网络情况保持 20–150 ms 的缓冲（看最近半分钟包到达的情况自动调整，也可以改成固定值），通过变速重采样补偿两块声卡的时钟差，Wi‑Fi 卡顿后把延迟拉回来。用 AVAudioEngine 播放，由 macOS 把它和 Mac 自己的声音混在一起。
 - **控制通道**（同一个端口）：HELLO（电脑名和设备类型；电脑没有声音、暂停发音频包时带上待机标记）、每秒一次的 STATUS（正在播放、正忙、静音、输出设备）、停止时的 BYE（带上原因：手动停止、网络、音频设备）。网络断开后，电脑会一直探测 Mac，Mac 也会在一分钟内不断联系电脑，网络一恢复就自动接上。见 [protocol/control-packet.md](../protocol/control-packet.md)。
 - **自动发现**：Mac 用 Bonjour 广播 `_earpair._udp`，Windows 用系统自带的 DNS-SD 找到它。
 

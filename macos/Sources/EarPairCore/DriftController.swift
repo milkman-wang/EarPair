@@ -14,6 +14,10 @@ public struct DriftController: Sendable {
     /// （重新）开始后先只用比例控制这么多秒，等水位稳住再积分。
     /// 否则开播那一刻的水位波动会被积分成一个假的时钟偏差，要几十秒才消掉。
     public var integralHold = 5.0
+    /// 水位离目标超过这么多（秒）时不积分，只用比例控制把水位拉回来。
+    /// 时钟偏差造成的误差很小（200 ppm 只差 1 ms 多）；大的误差来自目标刚变过（自动缓冲、手动换档）
+    /// 或者刚卡顿过，积进去会被当成一个假的时钟偏差
+    public var integrationBand = 0.005
 
     private var smoothedLevel: Double?
     private var integral = 0.0
@@ -54,7 +58,7 @@ public struct DriftController: Sendable {
         let error = smoothed - target
         if holdRemaining > 0 {
             holdRemaining -= dt
-        } else {
+        } else if abs(error) < integrationBand {
             let integralLimit = maxDeviation / integralGain
             integral = min(max(integral + error * dt, -integralLimit), integralLimit)
         }
