@@ -153,3 +153,7 @@
 "EarPair is up to date" = "EarPair 已是最新版本";
 "%@ is the latest version." = "%@ 是最新版本。";
 "Couldn’t check for updates" = "没能检查更新";
+
+/* 调试记录 */
+"Record Spatial Audio Data" = "记录空间音频数据";
+"Show Recordings in Finder" = "在访达中显示记录";

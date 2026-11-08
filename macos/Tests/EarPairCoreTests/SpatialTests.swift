@@ -429,3 +429,139 @@ struct HeadingTests {
         }
     }
 }
+
+@Suite("空间音频：常用位置")
+struct NaturalPositionTests {
+    /// 一段数据：先 0.5 秒匀速转到 to，再稳住 hold 秒；50 Hz
+    private func look(_ anchors: inout ScreenAnchors, at time: inout Double, from: inout Double, to: Double,
+                      hold: Double, acceleration: Double = 0.02) {
+        let rate = (to - from) / 0.5
+        for k in 1...25 {
+            time += 0.02
+            anchors.add(ScreenAnchors.Sample(time: time, timestamp: time, yaw: from + (to - from) * Double(k) / 25,
+                                             speed: abs(rate), verticalRate: rate, acceleration: acceleration))
+        }
+        let end = time + hold
+        while time < end {
+            time += 0.02
+            anchors.add(ScreenAnchors.Sample(time: time, timestamp: time, yaw: to, speed: 1, verticalRate: 0,
+                                             acceleration: acceleration))
+        }
+        from = to
+    }
+
+    @Test("设置时刻意正对 Mac，平时看它头少转 10°：三分钟内看着 Mac 时它的声音就在正前方，之后一直这样；点“对准 Mac”马上对上")
+    func settlesOnUsualPosition() {
+        var anchors = ScreenAnchors(angle: 50, preferred: .windows)
+        var t = 0.0, yaw = 0.0
+        look(&anchors, at: &t, from: &yaw, to: 0, hold: 2)
+        anchors.calibrate(macHeading: 0, windowsHeading: 50)
+        #expect(abs(anchors.relative(.mac)!) < 0.5)
+        // 平时：看 PC 20 秒，看 Mac 6 秒（头只转到 +10，剩下的靠眼睛）
+        func use(until end: Double) {
+            while t < end {
+                look(&anchors, at: &t, from: &yaw, to: 50, hold: 20)
+                look(&anchors, at: &t, from: &yaw, to: 10, hold: 6)
+            }
+        }
+        use(until: 3 * 60)
+        #expect(abs(anchors.relative(.mac)!) < 3)  // 现在看着 Mac
+        use(until: 16 * 60)
+        #expect(abs(anchors.relative(.mac)!) < 3)
+        #expect(anchors.naturalOffset(.mac) > 3)  // 是常用位置在起作用，不只是夹角变了
+        look(&anchors, at: &t, from: &yaw, to: 50, hold: 5)
+        #expect(abs(anchors.relative(.windows)!) < 3)
+
+        // 看着 Mac（头在 +14）点“对准 Mac”：它的声音马上到正前方，常用位置不变
+        look(&anchors, at: &t, from: &yaw, to: 14, hold: 2)
+        let offset = anchors.naturalOffset(.mac)
+        anchors.align(.mac)
+        #expect(abs(anchors.relative(.mac)!) < 0.01)
+        #expect(anchors.naturalOffset(.mac) == offset)
+    }
+
+    @Test("身体动了一下（头不转、加速度明显 0.3 秒）才加快调整；平时的小晃动不算")
+    func bumpSpeedsUpAdjusting() {
+        var anchors = ScreenAnchors(angle: 50, preferred: .windows)
+        var t = 0.0
+        func hold(_ seconds: Double, acceleration: Double) {
+            let end = t + seconds
+            while t < end {
+                t += 0.02
+                anchors.add(ScreenAnchors.Sample(time: t, timestamp: t, yaw: 0, speed: 1, verticalRate: 0,
+                                                 acceleration: acceleration))
+            }
+        }
+        hold(2, acceleration: 0.05)
+        #expect(!anchors.adjustingPosture)
+        hold(0.2, acceleration: 0.15)
+        #expect(!anchors.adjustingPosture)  // 不到 0.3 秒
+        hold(0.1, acceleration: 0.02)
+        hold(0.5, acceleration: 0.15)
+        #expect(anchors.adjustingPosture)
+        hold(100, acceleration: 0.02)
+        #expect(!anchors.adjustingPosture)  // 90 秒后恢复
+    }
+}
+
+@Suite("空间音频：调试记录")
+struct SpatialRecorderTests {
+    @Test("开着时事件写进 events.jsonl（回放工具认的格式），关掉后不再写；motion.csv 有表头")
+    func writesEvents() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("EarPairRecorder-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let recorder = SpatialRecorder()
+        recorder.event("ignored")  // 没开：不写
+        let folder = try recorder.start(in: root)
+        recorder.event("calib_done", ["macYaw": 0.1, "winYaw": 0.9], at: 12.5)
+        recorder.event("anchors_align", ["screen": "mac"], at: 13)
+        recorder.stop()
+        recorder.event("ignored")
+
+        let motion = try String(contentsOf: folder.appendingPathComponent("motion.csv"), encoding: .utf8)
+        #expect(motion.hasPrefix("t,ts,qx,qy,qz,qw,yaw,pitch,roll,"))
+        let lines = try String(contentsOf: folder.appendingPathComponent("events.jsonl"), encoding: .utf8)
+            .split(separator: "\n")
+        #expect(lines.count == 2)
+        let first = try #require(try JSONSerialization.jsonObject(with: Data(lines[0].utf8)) as? [String: Any])
+        #expect(first["type"] as? String == "calib_done")
+        #expect(first["t"] as? Double == 12.5)
+        #expect(first["macYaw"] as? Double == 0.1)
+        #expect(!recorder.isRecording)
+    }
+}
+
+@Suite("空间音频：低头看手机")
+struct LookDownTests {
+    @Test("刚打开、还在找两台的位置时，低头看了 14 秒手机（比平时低 32°、偏到一边）：两台的位置不动")
+    func phoneGlanceDuringAcquisition() throws {
+        var anchors = ScreenAnchors(angle: 40, preferred: .windows)
+        var t = 0.0
+        func hold(yaw: Double, pitch: Double, seconds: Double) {
+            let end = t + seconds
+            while t < end {
+                t += 0.02
+                anchors.add(ScreenAnchors.Sample(time: t, timestamp: t, yaw: yaw, speed: 1, verticalRate: 0,
+                                                 pitch: pitch))
+            }
+        }
+        func turn(from: Double, to: Double, pitchFrom: Double, pitchTo: Double) {
+            let rate = (to - from) / 0.5
+            for k in 1...25 {
+                t += 0.02
+                let f = Double(k) / 25
+                anchors.add(ScreenAnchors.Sample(time: t, timestamp: t, yaw: from + (to - from) * f, speed: abs(rate) + 30,
+                                                 verticalRate: rate, pitch: pitchFrom + (pitchTo - pitchFrom) * f))
+            }
+        }
+        hold(yaw: 0, pitch: 17, seconds: 40)  // 看显示器
+        let before = try #require(anchors.direction(of: .windows))
+        turn(from: 0, to: 16, pitchFrom: 17, pitchTo: -15)
+        hold(yaw: 16, pitch: -15, seconds: 14)  // 低头看手机
+        turn(from: 16, to: 0, pitchFrom: -15, pitchTo: 17)
+        hold(yaw: 0, pitch: 17, seconds: 5)
+        let after = try #require(anchors.direction(of: .windows))
+        #expect(abs(ScreenAnchors.wrap(after - before)) < 2)
+        #expect(abs(anchors.relative(.windows)!) < 3)
+    }
+}

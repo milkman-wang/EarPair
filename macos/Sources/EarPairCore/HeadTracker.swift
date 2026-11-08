@@ -19,14 +19,18 @@ public final class HeadTracker: NSObject, CMHeadphoneMotionManagerDelegate, @unc
         public var speed: Double
         /// 绕竖直轴的角速度（度/秒，左转为正）；没有重力数据时为 nil
         public var verticalRate: Double?
+        /// 头的加速度大小（g，已去掉重力）
+        public var acceleration: Double?
 
-        public init(time: Double, timestamp: Double, yaw: Double, pitch: Double, speed: Double, verticalRate: Double?) {
+        public init(time: Double, timestamp: Double, yaw: Double, pitch: Double, speed: Double, verticalRate: Double?,
+                    acceleration: Double? = nil) {
             self.time = time
             self.timestamp = timestamp
             self.yaw = yaw
             self.pitch = pitch
             self.speed = speed
             self.verticalRate = verticalRate
+            self.acceleration = acceleration
         }
     }
 
@@ -51,6 +55,8 @@ public final class HeadTracker: NSObject, CMHeadphoneMotionManagerDelegate, @unc
     public var onSample: ((Sample) -> Void)?
     /// 耳机连上（true）或断开（false）；线程不定
     public var onConnectionChange: ((Bool) -> Void)?
+    /// 调试记录（开着时每个样本和连接事件都记下来）；在 start() 之前设好
+    public var recorder: SpatialRecorder?
 
     override public init() {
         super.init()
@@ -111,16 +117,18 @@ public final class HeadTracker: NSObject, CMHeadphoneMotionManagerDelegate, @unc
 
     private func handle(_ motion: CMDeviceMotion) {
         let now = MonotonicClock.now()
-        let r = motion.rotationRate, g = motion.gravity
+        let r = motion.rotationRate, g = motion.gravity, a = motion.userAcceleration
         let gravity = (g.x * g.x + g.y * g.y + g.z * g.z).squareRoot()
         let degrees = 180 / Double.pi
         // 陀螺仪的角速度投到竖直轴上（重力的反方向），右手定则下为正就是从上往下看逆时针，也就是向左转
         let vertical = gravity > 0.5 ? -(r.x * g.x + r.y * g.y + r.z * g.z) / gravity * degrees : nil
+        recorder?.motion(motion, at: now)
         let q = motion.attitude.quaternion
         let sample = Sample(time: now, timestamp: motion.timestamp, yaw: Self.heading(x: q.x, y: q.y, z: q.z, w: q.w),
                             pitch: motion.attitude.pitch * degrees,
                             speed: (r.x * r.x + r.y * r.y + r.z * r.z).squareRoot() * degrees,
-                            verticalRate: vertical)
+                            verticalRate: vertical,
+                            acceleration: (a.x * a.x + a.y * a.y + a.z * a.z).squareRoot())
         lock.withLock {
             lastSampleAt = now
             connected = true
@@ -139,12 +147,14 @@ public final class HeadTracker: NSObject, CMHeadphoneMotionManagerDelegate, @unc
 
     public func headphoneMotionManagerDidConnect(_ manager: CMHeadphoneMotionManager) {
         lock.withLock { connected = true }
+        recorder?.event("connect")
         headLog.info("耳机连上")
         onConnectionChange?(true)
     }
 
     public func headphoneMotionManagerDidDisconnect(_ manager: CMHeadphoneMotionManager) {
         lock.withLock { connected = false }
+        recorder?.event("disconnect")
         headLog.info("耳机断开")
         onConnectionChange?(false)
     }

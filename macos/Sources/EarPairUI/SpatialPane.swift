@@ -265,3 +265,19 @@ private struct HeadGlyph: View {
         }
     }
 }
+
+/// App 菜单里的调试记录开关和“在访达中显示记录”
+public struct SpatialCommands: Commands {
+    @ObservedObject var spatial: SpatialController
+
+    public init(spatial: SpatialController) {
+        self.spatial = spatial
+    }
+
+    public var body: some Commands {
+        CommandGroup(after: .appSettings) {
+            Toggle(isOn: $spatial.recording) { Text("Record Spatial Audio Data", bundle: .module) }
+            Button { spatial.showRecordings() } label: { Text("Show Recordings in Finder", bundle: .module) }
+        }
+    }
+}
