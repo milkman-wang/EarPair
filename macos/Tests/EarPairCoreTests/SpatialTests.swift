@@ -387,3 +387,45 @@ private final class SineSource: StereoSource, @unchecked Sendable {
 
     func stop() {}
 }
+
+@Suite("空间音频：头的左右朝向")
+struct HeadingTests {
+    /// 绕轴 (ax, ay, az)（单位向量）转 degrees 度的四元数 (x, y, z, w)
+    private func rotation(_ axis: (Double, Double, Double), _ degrees: Double) -> (Double, Double, Double, Double) {
+        let h = degrees * .pi / 360
+        return (axis.0 * sin(h), axis.1 * sin(h), axis.2 * sin(h), cos(h))
+    }
+
+    /// 四元数乘法 a·b（先转 b，再转 a）
+    private func multiply(_ a: (Double, Double, Double, Double), _ b: (Double, Double, Double, Double))
+        -> (Double, Double, Double, Double) {
+        (a.3 * b.0 + a.0 * b.3 + a.1 * b.2 - a.2 * b.1,
+         a.3 * b.1 - a.0 * b.2 + a.1 * b.3 + a.2 * b.0,
+         a.3 * b.2 + a.0 * b.1 - a.1 * b.0 + a.2 * b.3,
+         a.3 * b.3 - a.0 * b.0 - a.1 * b.1 - a.2 * b.2)
+    }
+
+    private func heading(_ q: (Double, Double, Double, Double)) -> Double {
+        HeadTracker.heading(x: q.0, y: q.1, z: q.2, w: q.3)
+    }
+
+    @Test("左右转头：朝向跟着转，左为正")
+    func turning() {
+        #expect(abs(heading(rotation((0, 0, 1), 30)) - 30) < 1e-9)
+        #expect(abs(heading(rotation((0, 0, 1), -50)) - -50) < 1e-9)
+    }
+
+    @Test("耳机戴得歪一点（横轴不水平）时低头、抬头：朝向不变")
+    func noddingWithTiltedEarbud() {
+        // 头朝左 30°，耳机绕前后轴歪 15°，再绕耳机横轴低头 40° 或抬头 30°
+        let worn = multiply(rotation((0, 0, 1), 30), rotation((0, 1, 0), 15))
+        for nod in [40.0, -30] {
+            let q = multiply(worn, rotation((1, 0, 0), nod))
+            #expect(abs(heading(q) - heading(worn)) < 1e-6)
+            // CMAttitude 的 yaw（设备 y 轴的水平方向）在这里会偏：说明这个测试真的会抓到问题
+            let yAxis = (2 * (q.0 * q.1 - q.3 * q.2), 1 - 2 * (q.0 * q.0 + q.2 * q.2))
+            let yaw = atan2(-yAxis.0, yAxis.1) * 180 / .pi
+            #expect(abs(yaw - 30) > 5)
+        }
+    }
+}
