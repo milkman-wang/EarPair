@@ -12,7 +12,7 @@ public final class HeadTracker: NSObject, CMHeadphoneMotionManagerDelegate, @unc
         public var time: Double
         /// 传感器时间戳（秒）
         public var timestamp: Double
-        /// 左右朝向（度，左转为正）和俯仰（度）
+        /// 左右朝向（度，左转为正，见 heading）和俯仰（度）
         public var yaw: Double
         public var pitch: Double
         /// 角速度大小（度/秒）
@@ -116,7 +116,8 @@ public final class HeadTracker: NSObject, CMHeadphoneMotionManagerDelegate, @unc
         let degrees = 180 / Double.pi
         // 陀螺仪的角速度投到竖直轴上（重力的反方向），右手定则下为正就是从上往下看逆时针，也就是向左转
         let vertical = gravity > 0.5 ? -(r.x * g.x + r.y * g.y + r.z * g.z) / gravity * degrees : nil
-        let sample = Sample(time: now, timestamp: motion.timestamp, yaw: motion.attitude.yaw * degrees,
+        let q = motion.attitude.quaternion
+        let sample = Sample(time: now, timestamp: motion.timestamp, yaw: Self.heading(x: q.x, y: q.y, z: q.z, w: q.w),
                             pitch: motion.attitude.pitch * degrees,
                             speed: (r.x * r.x + r.y * r.y + r.z * r.z).squareRoot() * degrees,
                             verticalRate: vertical)
@@ -125,6 +126,13 @@ public final class HeadTracker: NSObject, CMHeadphoneMotionManagerDelegate, @unc
             connected = true
         }
         onSample?(sample)
+    }
+
+    /// 左右朝向（度，左转为正）：耳机横轴（设备 x 轴，低头、抬头时绕的就是它）在水平面上的方向。参考坐标系 z 轴竖直向上。
+    /// 不用 CMAttitude 的 yaw：它是按 Z-X-Y 分解的欧拉角，等于设备 y 轴的水平方向；耳机戴得有点歪时 y 轴不水平，
+    /// 低头、抬头就会让它变 8–20°（实测），两台的声音会一起偏到一边。横轴的水平方向绕横轴转时不变，平时转头和 yaw 一样
+    public static func heading(x: Double, y: Double, z: Double, w: Double) -> Double {
+        atan2(2 * (x * y + w * z), 1 - 2 * (y * y + z * z)) * 180 / .pi
     }
 
     // MARK: - CMHeadphoneMotionManagerDelegate
