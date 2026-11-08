@@ -62,7 +62,23 @@ private let appLog = Logger(subsystem: "app.earpair", category: "app")
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastWake = Date.distantPast
 
+    /// 用户自己打开（“应用程序”、启动台、聚焦搜索）时主窗口会弹出来，要带到前台。只在菜单栏的 App（LSUIElement）
+    /// 系统启动时不激活；macOS 14 起的“协作式”激活（NSApp.activate()）也会被拒绝，焦点留在访达等原来的 App 上
+    /// （macOS 27.3 实测，启动前改成普通 App 也一样）。所以启动前先当作普通 App（出现在程序坞和 ⌘Tab 里，
+    /// 关窗口后 MainWindow 会改回去），启动完成时用旧的强制激活。作为登录项启动时不弹窗口，保持只在菜单栏
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        if !Self.launchedAsLoginItem { NSApp.setActivationPolicy(.regular) }
+    }
+
+    private static var launchedAsLoginItem: Bool {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent,
+              event.eventID == AEEventID(kAEOpenApplication) else { return false }
+        return event.paramDescriptor(forKeyword: AEKeyword(keyAEPropData))?.enumCodeValue
+            == OSType(keyAELaunchedAsLogInItem)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if NSApp.activationPolicy() == .regular { NSApp.activate(ignoringOtherApps: true) }  // 用户刚打开它，抢焦点是对的
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil,
                                                           queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.lastWake = Date() }
