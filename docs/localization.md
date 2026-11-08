@@ -61,6 +61,7 @@ EarPair is in English and Simplified Chinese, and English is used for every othe
 | 概览 / 声音 / 网络 / 连接 | Overview / Sound / Network / Connection |
 | 音量 | Volume |
 | 音量平衡 | Auto level |
+| 自动缓冲 | Auto buffer |
 | 目标响度：柔和 / 标准 / 响亮 | Target loudness: Soft / Standard / Loud |
 | 当前增益 | Current gain |
 | 静音 / 取消静音 | Mute / Unmute |

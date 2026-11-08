@@ -200,22 +200,31 @@ struct NetworkPane: View {
     var body: some View {
         Form {
             Section {
+                Toggle(isOn: $controller.autoBuffer) { Text("Auto buffer", bundle: .module) }
                 LabeledContent {
-                    Picker(selection: $controller.bufferMs) {
-                        ForEach([30, 60, 100, 150], id: \.self) { value in
-                            Text(verbatim: Format.milliseconds(Double(value))).tag(value)
+                    if controller.autoBuffer {
+                        // 自动选的目标；没在收的时候没有意义
+                        Text(verbatim: stats.isStreaming ? Format.milliseconds(stats.targetMs.rounded()) : "—")
+                            .monospacedDigit()
+                            .foregroundStyle(stats.isStreaming ? .secondary : .tertiary)
+                    } else {
+                        Picker(selection: $controller.bufferMs) {
+                            ForEach([30, 60, 100, 150], id: \.self) { value in
+                                Text(verbatim: Format.milliseconds(Double(value))).tag(value)
+                            }
+                        } label: {
+                            Text("Buffer", bundle: .module)
                         }
-                    } label: {
-                        Text("Buffer", bundle: .module)
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .fixedSize()
                 } label: {
                     Text("Buffer", bundle: .module)
                 }
                 if !controller.history.isEmpty {
-                    BufferHistoryChart(history: controller.history, target: Double(controller.bufferMs))
+                    BufferHistoryChart(history: controller.history,
+                                       target: controller.autoBuffer ? stats.targetMs.rounded() : Double(controller.bufferMs))
                         .frame(height: 110)
                         .padding(.vertical, 4)
                 }

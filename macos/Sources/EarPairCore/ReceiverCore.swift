@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let bufferLog = Logger(subsystem: "app.earpair", category: "buffer")
 
 public enum PlaybackState: String, Sendable {
     /// 没有发送端
@@ -102,8 +105,10 @@ public struct ReceiverStats: Equatable, Sendable {
 /// - 其他方法可以在任意线程调用。
 public final class ReceiverCore: @unchecked Sendable {
     public struct Configuration: Sendable {
-        /// 缓冲目标（秒）
+        /// 手动的缓冲目标（秒）；自动缓冲打开时不用它
         public var targetLatency = 0.060
+        /// 自动缓冲：按网络情况自己调整缓冲目标（见 AdaptiveBuffer）
+        public var autoBuffer = false
         /// 缺包时最多再等几个后续包
         public var reorderWindow = 3
         /// 多久收不到包算断开（秒）
@@ -180,6 +185,8 @@ public final class ReceiverCore: @unchecked Sendable {
     private var stream: Stream?
     private var ring: StereoRing?
     private var pending: [UInt32: PendingPacket] = [:]
+    /// 音频线程上用掉的待处理包先放这里，回到网络线程再释放（音频线程上不释放内存）
+    private var recycled: [PendingPacket] = []
     private var state: PlaybackState = .idle
     /// 最近一个被 BYE 结束的流；开始新流时清掉
     private var endedStream: EndedStream?
@@ -213,6 +220,9 @@ public final class ReceiverCore: @unchecked Sendable {
     private var renderStreamEpoch = -1
     private var renderLevelEpoch = -1
     private var drift = DriftController()
+    private var adaptive = AdaptiveBuffer()
+    /// 日志里上次记下的自动缓冲目标
+    private var loggedTarget = AdaptiveBuffer().target
     private var resampler = DriftResampler()
     private var leveler = LoudnessLeveler()
     private var limiter = PeakLimiter()
@@ -251,6 +261,7 @@ public final class ReceiverCore: @unchecked Sendable {
         decodeBuffer.initialize(repeating: 0, count: PacketHeader.maxFrameCount * 2)
         renderBuffer = .allocate(capacity: Self.renderBufferFrames * 2)
         renderBuffer.initialize(repeating: 0, count: Self.renderBufferFrames * 2)
+        recycled.reserveCapacity(64)
     }
 
     deinit {
@@ -280,22 +291,43 @@ public final class ReceiverCore: @unchecked Sendable {
     /// 音频输出实际使用的采样率。和流的采样率不一致时输出静音，等输出重建。
     public func setOutputSampleRate(_ rate: Double) { lock.withLock { outputSampleRate = rate } }
 
-    /// 修改缓冲目标。调大会重新攒缓冲（短暂静音），调小会立刻丢掉多出来的部分。
+    /// 修改手动的缓冲目标。自动缓冲关着时立刻生效：调大会重新攒缓冲（短暂静音），调小会立刻丢掉多出来的部分。
     public func setTargetLatency(_ seconds: Double) {
         lock.withLock {
-            let newValue = min(max(seconds, 0.01), 0.5)
-            let increased = newValue > config.targetLatency
-            config.targetLatency = newValue
-            guard let s = stream, let ring, state != .idle else { return }
-            let target = targetFrames(for: s)
-            if increased {
-                if state == .playing && ring.count < target { state = .buffering }
-            } else if ring.count > target {
-                ring.discard(frames: ring.count - target)
-                fadeInNextRender = true
-            }
-            levelEpoch += 1
+            let old = currentTarget
+            config.targetLatency = min(max(seconds, 0.01), 0.5)
+            if !config.autoBuffer { applyTargetChange(from: old) }
         }
+    }
+
+    /// 打开或关闭自动缓冲。打开时从当前的缓冲目标开始调整；关闭时回到手动的目标。
+    public func setAutoBuffer(_ on: Bool) {
+        lock.withLock {
+            guard on != config.autoBuffer else { return }
+            let old = currentTarget
+            config.autoBuffer = on
+            if on {
+                adaptive.start(from: old)
+                loggedTarget = adaptive.target
+            } else {
+                applyTargetChange(from: old)
+            }
+        }
+    }
+
+    /// 现在用的缓冲目标（秒）
+    private var currentTarget: Double { config.autoBuffer ? adaptive.target : config.targetLatency }
+
+    private func applyTargetChange(from old: Double) {
+        guard let s = stream, let ring, state != .idle else { return }
+        let target = targetFrames(for: s)
+        if currentTarget > old {
+            if state == .playing && ring.count < target { state = .buffering }
+        } else if ring.count > target {
+            ring.discard(frames: ring.count - target)
+            fadeInNextRender = true
+        }
+        levelEpoch += 1
     }
 
     public func resetStatistics() {
@@ -379,6 +411,7 @@ public final class ReceiverCore: @unchecked Sendable {
 
     private func ingestLocked(_ header: PacketHeader, frames: Int, sender: String, now: Double,
                               startedFormat: inout StreamFormat?) -> IngestResult {
+        if !recycled.isEmpty { recycled.removeAll(keepingCapacity: true) }
         if let ended = endedStream, ended.id == header.streamID, ended.sender == sender {
             // BYE 之后还在路上的包
             counters.packetsIgnored += 1
@@ -396,6 +429,7 @@ public final class ReceiverCore: @unchecked Sendable {
             s.nextSequence = header.sequence
             s.nextSampleTime = header.sampleTime
             s.lastTransit = nil
+            adaptive.restart()
             pending.removeAll()
             fadeInNextPacket = true
         }
@@ -415,6 +449,9 @@ public final class ReceiverCore: @unchecked Sendable {
         let delta = Int32(bitPattern: header.sequence &- s.nextSequence)
         if (delta < 0 && delta > -Self.maxSequenceJump) || pending[header.sequence] != nil {
             counters.packetsLate += 1
+            // 晚到的包正说明缓冲不够，自动缓冲要算上它
+            adaptive.latePacketArrived(transit: transit(s, header, now: now), at: now)
+            logBufferChange()
             return .late
         }
 
@@ -464,6 +501,7 @@ public final class ReceiverCore: @unchecked Sendable {
         playedFrames = 0
         fadeInNextPacket = true
         jitter = 0
+        adaptive.restart()
         streamEpoch += 1
         levelEpoch += 1
     }
@@ -514,7 +552,8 @@ public final class ReceiverCore: @unchecked Sendable {
     }
 
     /// 等够了还没等到缺的包：把它们记为丢失，从最早的待处理包继续。
-    private func skipToEarliestPending() {
+    /// `recycle`：在音频线程上调用时为 true，用掉的包不在这里释放
+    private func skipToEarliestPending(recycle: Bool = false) {
         guard let s = stream else { return }
         var earliest: UInt32?
         var smallestDelta = Int32.max
@@ -531,11 +570,11 @@ public final class ReceiverCore: @unchecked Sendable {
         }
         counters.packetsLost += Int(smallestDelta)
         s.nextSequence = first
-        flushPending()
+        flushPending(recycle: recycle)
     }
 
     /// 把已经轮到的待处理包依次写入缓冲。
-    private func flushPending() {
+    private func flushPending(recycle: Bool = false) {
         guard let s = stream else { return }
         while var packet = pending.removeValue(forKey: s.nextSequence) {
             let header = packet.header
@@ -544,6 +583,7 @@ public final class ReceiverCore: @unchecked Sendable {
                 append(header, samples: buffer.baseAddress!, frames: frames)
             }
             s.nextSequence &+= 1
+            if recycle && recycled.count < recycled.capacity { recycled.append(packet) }
         }
     }
 
@@ -560,16 +600,40 @@ public final class ReceiverCore: @unchecked Sendable {
     }
 
     private func targetFrames(for stream: Stream) -> Int {
-        max(Int(config.targetLatency * Double(stream.format.sampleRate)), 1)
+        max(Int(currentTarget * Double(stream.format.sampleRate)), 1)
     }
 
-    /// RFC 3550 风格的到达抖动估计
+    /// 传输时间：到达时刻 − 包里时间戳对应的时刻（基准是任意的，只看变化）
+    private func transit(_ s: Stream, _ header: PacketHeader, now: Double) -> Double {
+        now - Double(header.sampleTime) / Double(s.format.sampleRate)
+    }
+
+    /// RFC 3550 风格的到达抖动估计；同时交给自动缓冲（关着时也统计，打开时马上有数据）
     private func updateJitter(_ s: Stream, _ header: PacketHeader, now: Double) {
-        let transit = now - Double(header.sampleTime) / Double(s.format.sampleRate)
+        let transit = transit(s, header, now: now)
         if let last = s.lastTransit {
             jitter += (abs(transit - last) - jitter) / 16
         }
         s.lastTransit = transit
+        adaptive.setPacketDuration(Double(header.frameCount) / Double(s.format.sampleRate))
+        adaptive.packetArrived(transit: transit, at: now)
+        logBufferChange()
+    }
+
+    /// 自动缓冲的目标变了 5 ms 以上时记一笔（为什么变、变成多少），方便以后对着日志分析
+    private func logBufferChange() {
+        guard config.autoBuffer else { return }
+        let target = adaptive.target
+        guard abs(target - loggedTarget) >= 0.005 else { return }
+        let incidents = adaptive.incidents
+        let worst = incidents.map(\.needed).max().map { String(format: "%.0f", $0 * 1000) } ?? "—"
+        bufferLog.info("""
+            自动缓冲：\(String(format: "%.0f", self.loggedTarget * 1000), privacy: .public) → \
+            \(String(format: "%.0f", target * 1000), privacy: .public) ms，抖动 \
+            \(String(format: "%.1f", self.jitter * 1000), privacy: .public) ms，最近 5 分钟出问题 \
+            \(incidents.count, privacy: .public) 次（最多要 \(worst, privacy: .public) ms）
+            """)
+        loggedTarget = target
     }
 
     /// 16-bit 交错 PCM → Float 交错立体声（单声道复制到两边，多于两个声道只取前两个）。
@@ -644,11 +708,17 @@ public final class ReceiverCore: @unchecked Sendable {
                 let level = Double(ring.count)
                 let smoothing = 1 - exp(-Double(n) / rate / drift.levelSmoothing)
                 displayLevel = displayLevel.map { $0 + smoothing * (level - $0) } ?? level
+                adaptive.setRenderBlock(Double(n) / rate)
                 if config.driftCompensation {
                     ratio = drift.update(levelFrames: ring.count, targetFrames: target,
                                          blockFrames: n, sampleRate: rate)
                 }
                 let need = DriftResampler.requirement(phase: resampler.phase, outputFrames: n, ratio: ratio)
+                // 缓冲不够这一块了，而缺的包后面的包已经到了：不再等缺的包（它晚到也来不及播了），
+                // 现在就记为丢失、补上静音，接着播后面的。不然丢一个包就会卡一次、重新攒缓冲
+                while ring.count < need.needed && !pending.isEmpty {
+                    skipToEarliestPending(recycle: true)
+                }
                 if ring.count >= need.needed {
                     ring.peek(into: renderBuffer, frames: need.needed)
                     ring.discard(frames: need.consumed)
@@ -658,6 +728,7 @@ public final class ReceiverCore: @unchecked Sendable {
                     // 缓冲耗尽：这一块输出静音，重新攒缓冲
                     state = .buffering
                     counters.underruns += 1
+                    adaptive.underrun()
                 }
                 driftEstimatePPM = config.driftCompensation ? drift.estimatedPPM : 0
             }
@@ -761,7 +832,7 @@ public final class ReceiverCore: @unchecked Sendable {
             var result = counters
             result.state = state
             result.endReason = state == .idle ? lastEndReason : nil
-            result.targetMs = config.targetLatency * 1000
+            result.targetMs = currentTarget * 1000
             result.jitterMs = jitter * 1000
             result.driftPPM = driftEstimatePPM
             result.inputLevelDB = meters.inputLevelDB

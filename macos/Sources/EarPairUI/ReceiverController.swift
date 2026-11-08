@@ -156,6 +156,12 @@ public final class ReceiverController: ObservableObject {
         didSet { core.setTargetLoudness(loudness.lufs); save(loudness.rawValue, Keys.loudness) }
     }
 
+    /// 自动缓冲：按网络情况自己调整；关掉后用 bufferMs
+    @Published public var autoBuffer: Bool {
+        didSet { core.setAutoBuffer(autoBuffer); save(autoBuffer, Keys.autoBuffer) }
+    }
+
+    /// 手动的缓冲目标（毫秒）
     @Published public var bufferMs: Int {
         didSet { core.setTargetLatency(Double(bufferMs) / 1000); save(bufferMs, Keys.bufferMs) }
     }
@@ -173,6 +179,7 @@ public final class ReceiverController: ObservableObject {
         static let autoLevel = "autoLevel"
         static let loudness = "loudness"
         static let bufferMs = "bufferMs"
+        static let autoBuffer = "autoBuffer"
         static let drift = "driftCompensation"
         static let receiverID = "receiverID"
         static let lastSenderName = "lastSenderName"
@@ -222,11 +229,13 @@ public final class ReceiverController: ObservableObject {
         let balance = defaults.object(forKey: Keys.balance) as? Double ?? 0
         let autoLevel = defaults.object(forKey: Keys.autoLevel) as? Bool ?? true
         let loudness = LoudnessPreset(rawValue: defaults.string(forKey: Keys.loudness) ?? "") ?? .standard
-        let bufferMs = defaults.object(forKey: Keys.bufferMs) as? Int ?? 60
+        let autoBuffer = defaults.object(forKey: Keys.autoBuffer) as? Bool ?? true
+        let bufferMs = defaults.object(forKey: Keys.bufferMs) as? Int ?? 30
         let drift = defaults.object(forKey: Keys.drift) as? Bool ?? true
 
         var configuration = ReceiverCore.Configuration()
         configuration.targetLatency = Double(bufferMs) / 1000
+        configuration.autoBuffer = autoBuffer
         configuration.autoLevel = autoLevel
         configuration.targetLoudness = loudness.lufs
         configuration.driftCompensation = drift
@@ -247,6 +256,7 @@ public final class ReceiverController: ObservableObject {
         self.balance = balance
         self.autoLevel = autoLevel
         self.loudness = loudness
+        self.autoBuffer = autoBuffer
         self.bufferMs = bufferMs
         driftCompensation = drift
         lastSenderName = defaults.string(forKey: Keys.lastSenderName)
@@ -275,7 +285,8 @@ public final class ReceiverController: ObservableObject {
         balance = 0
         self.autoLevel = autoLevel
         loudness = .standard
-        bufferMs = 60
+        autoBuffer = true
+        bufferMs = 30
         driftCompensation = true
         self.stats = stats
         localAddresses = addresses
