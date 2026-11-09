@@ -7,6 +7,8 @@ namespace EarPair.App.Services;
 public static class AppLog
 {
     private static readonly object Gate = new();
+    /// <summary>上次写日志是哪一天：换了一天就顺便删旧日志（常驻通知区域几周不退出也只留 7 天）</summary>
+    private static DateTime _day;
 
     public static string Folder { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EarPair", "logs");
@@ -21,9 +23,15 @@ public static class AppLog
         {
             lock (Gate)
             {
+                DateTime now = DateTime.Now;
+                if (now.Date != _day)
+                {
+                    _day = now.Date;
+                    Prune();
+                }
                 Directory.CreateDirectory(Folder);
-                string file = Path.Combine(Folder, $"earpair-{DateTime.Now:yyyyMMdd}.log");
-                File.AppendAllText(file, $"{DateTime.Now:HH:mm:ss.fff}  {message}{Environment.NewLine}");
+                string file = Path.Combine(Folder, $"earpair-{now:yyyyMMdd}.log");
+                File.AppendAllText(file, $"{now:HH:mm:ss.fff}  {message}{Environment.NewLine}");
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

@@ -80,6 +80,11 @@ Name: "{autoprograms}\EarPair"; Filename: "{app}\EarPair.exe"
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "EarPair"; ValueType: none; Flags: uninsdeletevalue dontcreatekey
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"; ValueName: "EarPair"; ValueType: none; Flags: uninsdeletevalue dontcreatekey
 
+[UninstallDelete]
+; Logs and downloaded updates are EarPair's own leftovers; settings.json stays in case EarPair is installed again
+Type: filesandordirs; Name: "{localappdata}\EarPair\logs"
+Type: filesandordirs; Name: "{localappdata}\EarPair\updates"
+
 [Run]
 Filename: "{app}\EarPair.exe"; Description: "{cm:LaunchProgram,EarPair}"; Flags: nowait postinstall skipifsilent
 ; Silent installs (EarPair's own updater passes /SILENT /RELAUNCH=1) start EarPair again when it was

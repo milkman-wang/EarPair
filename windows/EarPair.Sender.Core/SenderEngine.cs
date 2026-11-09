@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.CoreAudioApi.Interfaces;
@@ -103,6 +105,10 @@ public sealed class SenderEngine : IDisposable
     private const double StandbyAfter = 3;
     /// <summary>16-bit 峰值超过这个才算有声音（约 −80 dBFS）。没有程序在放声音时，loopback 采到的是全 0</summary>
     private const int SoundThreshold = 3;
+    /// <summary>进程 loopback 激活失败后隔多久再试（秒）；试完这几次还不行，就一直用设备 loopback，直到下次打开发送</summary>
+    private static readonly double[] ProcessLoopbackRetryDelays = [30, 300];
+    /// <summary>用名字（比如 mac.local）指定的 Mac 联系不上这么久（秒），就重新解析一次地址</summary>
+    private const double ResolveAgainAfter = 30;
 
     private readonly BlockingCollection<Action> _work = new();
     private readonly Thread _thread;
@@ -116,10 +122,21 @@ public sealed class SenderEngine : IDisposable
     private ICapture? _capture;
     /// <summary>当前这路采集是进程 loopback（跟随系统默认设备时用），否则是设备 loopback</summary>
     private bool _usingProcessLoopback;
-    /// <summary>进程 loopback 激活失败过（系统太老等）：之后都用设备 loopback，不再每次重试</summary>
-    private bool _processLoopbackUnavailable;
+    /// <summary>
+    /// 进程 loopback 连续激活失败的次数（成功一次清零）。失败多半是暂时的（激活超时、音频服务重启、睡眠刚醒），
+    /// 所以先退回设备 loopback，到 _processLoopbackRetryAt 再试；系统确实不支持时试几次就不再试
+    /// </summary>
+    private int _processLoopbackFailures;
+    private double _processLoopbackRetryAt = double.NegativeInfinity;
     private UdpSender? _udp;
     private (string Host, int Port)? _udpTarget;
+    private double _socketCreatedAt;
+    /// <summary>上次失败的是探测：重试时也先探测，不直接开始采集、静音本机</summary>
+    private bool _retryProbe;
+    /// <summary>发送中用户自己取消了这个设备的静音（音量键等）：关掉发送之前不再静音它，内部重新开始也一样</summary>
+    private string? _userUnmutedDevice;
+    /// <summary>我们静的音，恢复时设备已经不在了（被拔掉）：设备回来时再恢复（App 退出时读它，所以是 volatile）</summary>
+    private volatile string? _unrestoredMuteDevice;
     private PacketEncoder? _encoder;
     private LocalMute? _mute;
     private SenderState _state = SenderState.Stopped;
@@ -222,6 +239,8 @@ public sealed class SenderEngine : IDisposable
     {
         SetTicking(true);
         bool targetChanged = _settings is null || _settings.Host != settings.Host || _settings.Port != settings.Port;
+        // 用户刚把“发送时本机静音”打开：以前的“手动取消过静音”不再算
+        if (settings.MuteLocal && _settings is { MuteLocal: false }) _userUnmutedDevice = null;
         if (targetChanged)
         {
             // 先停采集，再跟旧的 Mac 告别
@@ -276,8 +295,18 @@ public sealed class SenderEngine : IDisposable
             .ToList();
     }
 
-    /// <summary>上次异常退出时留下的本机静音：恢复它。</summary>
-    public static void RestoreLeftoverMute(string deviceId) => LocalMute.RestoreLeftover(deviceId);
+    /// <summary>被我们静音、但恢复时设备已经不在的那个设备（没有是 null）。App 退出时记下来，下次启动时恢复。</summary>
+    public string? PendingMuteRestore => _unrestoredMuteDevice;
+
+    /// <summary>之前静音的设备现在不在：等它回来时恢复（设备增减时检查）。</summary>
+    public void RestoreMuteWhenBack(string deviceId) => Post(() =>
+    {
+        _unrestoredMuteDevice ??= deviceId;
+        RestorePendingMute();
+    });
+
+    /// <summary>上次异常退出时留下的本机静音：恢复它。设备现在不在时返回 false。</summary>
+    public static bool RestoreLeftoverMute(string deviceId) => LocalMute.RestoreLeftover(deviceId);
 
     // MARK: - 引擎线程
 
@@ -303,6 +332,11 @@ public sealed class SenderEngine : IDisposable
         SendBye(ByeReason.User);
         _settings = null;
         ReleaseSocket();
+        // 关掉发送：下次打开时重新静音、重新试进程 loopback
+        _userUnmutedDevice = null;
+        _processLoopbackFailures = 0;
+        _processLoopbackRetryAt = double.NegativeInfinity;
+        _retryProbe = false;
         SetState(SenderState.Stopped, null);
     }
 
@@ -311,14 +345,16 @@ public sealed class SenderEngine : IDisposable
     {
         TearDown();
         SendBye(ByeReason.Network);
+        _retryProbe = false;
         _fastProbeUntil = Now + 30;
         try
         {
             EnsureSocket(settings);
         }
-        catch (Exception ex) when (ex is System.Net.Sockets.SocketException or ArgumentException)
+        catch (Exception ex) when (ex is SocketException or ArgumentException)
         {
-            SetState(SenderState.Failed, CoreStrings.HostNotFound(settings.Host));
+            SetState(SenderState.Failed, DescribeSocketError(ex, settings.Host));
+            _retryProbe = true;
             ScheduleRetry();
             return;
         }
@@ -361,15 +397,17 @@ public sealed class SenderEngine : IDisposable
     private void Restart()
     {
         TearDown();
+        _retryProbe = false;
         if (_settings is not { } settings || _enumerator is null) return;
+        RestorePendingMute();
 
         try
         {
             EnsureSocket(settings);
         }
-        catch (Exception ex) when (ex is System.Net.Sockets.SocketException or ArgumentException)
+        catch (Exception ex) when (ex is SocketException or ArgumentException)
         {
-            SetState(SenderState.Failed, CoreStrings.HostNotFound(settings.Host));
+            SetState(SenderState.Failed, DescribeSocketError(ex, settings.Host));
             ScheduleRetry();
             return;
         }
@@ -451,7 +489,14 @@ public sealed class SenderEngine : IDisposable
         });
         _udp = udp;
         _udpTarget = (settings.Host, settings.Port);
+        _socketCreatedAt = Now;
     }
+
+    /// <summary>建套接字失败的原因：没有网络和找不到这个地址分开说</summary>
+    private static string DescribeSocketError(Exception ex, string host) =>
+        ex is SocketException { SocketErrorCode: SocketError.NetworkUnreachable or SocketError.NetworkDown or SocketError.HostUnreachable }
+            ? CoreStrings.NetworkUnavailable
+            : CoreStrings.HostNotFound(host);
 
     /// <summary>
     /// 跟随系统默认设备时用进程 loopback（采集除 EarPair 外所有程序的声音，不受输出设备静音和音量影响）；
@@ -460,17 +505,21 @@ public sealed class SenderEngine : IDisposable
     private ICapture CreateCapture(MMDevice device, SenderSettings settings)
     {
         _usingProcessLoopback = false;
-        if (settings.DeviceId is null && !_processLoopbackUnavailable)
+        if (settings.DeviceId is null && Now >= _processLoopbackRetryAt)
         {
             try
             {
                 var capture = new ProcessLoopbackCapture(settings.KeepAlive ? device : null);
                 _usingProcessLoopback = true;
+                _processLoopbackFailures = 0;
                 return capture;
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
-                _processLoopbackUnavailable = true;
+                _processLoopbackFailures++;
+                _processLoopbackRetryAt = _processLoopbackFailures <= ProcessLoopbackRetryDelays.Length
+                    ? Now + ProcessLoopbackRetryDelays[_processLoopbackFailures - 1]
+                    : double.PositiveInfinity;
                 Log?.Invoke(CoreStrings.LogProcessLoopbackUnavailable(Describe(ex)));
             }
         }
@@ -510,6 +559,7 @@ public sealed class SenderEngine : IDisposable
     private void OnDevicesChanged(string? defaultDeviceId)
     {
         DevicesChanged?.Invoke();
+        RestorePendingMute();
         if (_settings is not { } settings) return;
         bool follow = settings.DeviceId is null;
         if (_state == SenderState.Sending && follow && defaultDeviceId is not null && defaultDeviceId != _deviceId)
@@ -561,8 +611,36 @@ public sealed class SenderEngine : IDisposable
         if (_state is SenderState.Failed or SenderState.WaitingForDevice && now >= _retryAt)
         {
             _retryAt = double.PositiveInfinity;
+            if (_retryProbe && _state == SenderState.Failed) Probe(settings);
+            else Restart();
+            return;
+        }
+
+        // 进程 loopback 刚才失败、退回了设备 loopback：到时间再试一次（静音的设备上设备 loopback 可能只剩静音）
+        if (_state == SenderState.Sending && settings.DeviceId is null && !_usingProcessLoopback &&
+            _processLoopbackFailures > 0 && now >= _processLoopbackRetryAt)
+        {
+            Log?.Invoke(CoreStrings.LogProcessLoopbackRetry);
             Restart();
             return;
+        }
+
+        // 用名字指定的 Mac 一直联系不上：它可能换了地址，重新解析
+        if (_state == SenderState.WaitingForMac && _udp is not null && !IPAddress.TryParse(settings.Host, out _) &&
+            now - _socketCreatedAt > ResolveAgainAfter && now - _remoteAt > ResolveAgainAfter)
+        {
+            ReleaseSocket();
+        }
+        if (_state == SenderState.WaitingForMac && _udp is null)
+        {
+            try
+            {
+                EnsureSocket(settings);
+            }
+            catch (Exception ex) when (ex is SocketException or ArgumentException)
+            {
+                // 现在解析不了（网络还没好）：下个 tick 再试
+            }
         }
 
         if (_state is SenderState.Sending or SenderState.WaitingForMac && now >= _nextHelloAt && _udp is not null)
@@ -695,8 +773,19 @@ public sealed class SenderEngine : IDisposable
             }
             Log?.Invoke(CoreStrings.LogMuteRememberedButProcessLoopback(name));
         }
+        if (_userUnmutedDevice == device.ID)
+        {
+            Log?.Invoke(CoreStrings.LogMuteSkippedUserUnmuted(name));
+            return;
+        }
         _mute = new LocalMute(device);
-        _mute.UserUnmuted += () => Post(() => Log?.Invoke(CoreStrings.LogUserUnmuted(name)));
+        string id = device.ID;
+        _mute.UserUnmuted += () => Post(() =>
+        {
+            _userUnmutedDevice = id;
+            Log?.Invoke(CoreStrings.LogUserUnmuted(name));
+            Publish();
+        });
         _mutedAt = Now;
         switch (_mute.Mute())
         {
@@ -776,12 +865,20 @@ public sealed class SenderEngine : IDisposable
         {
             bool wasMuted = _mute.MutedByUs;
             string name = _mute.DeviceName;
+            string id = _mute.DeviceId;
+            bool restored = _mute.Restore();
             _mute.Dispose();
             _mute = null;
-            if (wasMuted)
+            if (wasMuted && restored)
             {
                 Log?.Invoke(CoreStrings.LogMuteRestored(name));
                 MutedDeviceChanged?.Invoke(null);
+            }
+            else if (wasMuted)
+            {
+                // 设备已经被拔掉了：系统会记着它静音，插回来时再恢复（App 那边的记录也留着，下次启动时恢复）
+                _unrestoredMuteDevice = id;
+                Log?.Invoke(CoreStrings.LogMuteRestoreDeferred(name));
             }
         }
         _encoder = null;
@@ -789,6 +886,15 @@ public sealed class SenderEngine : IDisposable
         _deviceName = null;
         Volatile.Write(ref _peakLeft, 0);
         Volatile.Write(ref _peakRight, 0);
+    }
+
+    /// <summary>之前没恢复成的静音：设备回来了就恢复</summary>
+    private void RestorePendingMute()
+    {
+        if (_unrestoredMuteDevice is not { } id || !LocalMute.RestoreLeftover(id)) return;
+        _unrestoredMuteDevice = null;
+        Log?.Invoke(CoreStrings.LogMuteRestoredLater);
+        if (_mute is not { MutedByUs: true }) MutedDeviceChanged?.Invoke(null);
     }
 
     private void ReleaseSocket()

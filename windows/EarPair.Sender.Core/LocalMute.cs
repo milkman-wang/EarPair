@@ -60,18 +60,20 @@ internal sealed class LocalMute : IDisposable
         }
     }
 
-    /// <summary>恢复我们静的音。</summary>
-    public void Restore()
+    /// <summary>恢复我们静的音。设备已经没了、恢复不成时返回 false（不是我们静的音也返回 true）。</summary>
+    public bool Restore()
     {
-        if (!_mutedByUs) return;
+        if (!_mutedByUs) return true;
+        // 先改标记再取消静音：音量通知里看到的“取消静音”不能当成用户点的
         _mutedByUs = false;
         try
         {
             _device.AudioEndpointVolume.Mute = false;
+            return true;
         }
         catch (COMException)
         {
-            // 设备已经没了
+            return false; // 设备已经没了
         }
     }
 
@@ -121,19 +123,21 @@ internal sealed class LocalMute : IDisposable
         }
     }
 
-    /// <summary>上次异常退出时留下的静音：那个设备还静着就恢复。</summary>
-    public static void RestoreLeftover(string deviceId)
+    /// <summary>之前没恢复成的静音（异常退出、设备被拔掉）：那个设备还静着就恢复。设备现在不在（恢复不了）时返回 false。</summary>
+    public static bool RestoreLeftover(string deviceId)
     {
         try
         {
             using var enumerator = new MMDeviceEnumerator();
             MMDevice device = enumerator.GetDevice(deviceId);
-            if (device.State == DeviceState.Active && device.AudioEndpointVolume.Mute)
-                device.AudioEndpointVolume.Mute = false;
+            if (device.State != DeviceState.Active) return false;
+            if (device.AudioEndpointVolume.Mute) device.AudioEndpointVolume.Mute = false;
+            return true;
         }
         catch (COMException)
         {
-            Debug.WriteLine("恢复上次的静音失败：设备不在了");
+            Debug.WriteLine("恢复之前的静音失败：设备不在了");
+            return false;
         }
     }
 }

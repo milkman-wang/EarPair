@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using EarPair.App.Interop;
 using EarPair.App.Services;
 using EarPair.App.ViewModels;
@@ -321,7 +322,9 @@ public sealed partial class MainWindow : Window
         if (_app.Updater.Latest is not { PageUrl.Length: > 0 } release) return;
         try
         {
-            Process.Start(new ProcessStartInfo(release.PageUrl) { UseShellExecute = true });
+            // 经 explorer 打开：浏览器如果是 EarPair 直接启动的，就成了 EarPair 的子进程，
+            // 进程 loopback 排除的是 EarPair 整个进程树，浏览器的声音就采不到了
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{release.PageUrl}\"") { UseShellExecute = false });
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
@@ -360,7 +363,22 @@ public sealed partial class MainWindow : Window
 
     private async void OnEnterAddress(object sender, RoutedEventArgs e) => await ShowAddressDialogAsync();
 
-    public async void ShowAddressDialog() => await ShowAddressDialogAsync();
+    /// <summary>从通知区域菜单打开：窗口可能刚建好、内容还没加载（XamlRoot 还是 null），等加载完再弹</summary>
+    public async void ShowAddressDialog()
+    {
+        if (Content is FrameworkElement { XamlRoot: null } root)
+        {
+            var loaded = new TaskCompletionSource();
+            void OnLoaded(object sender, RoutedEventArgs e)
+            {
+                root.Loaded -= OnLoaded;
+                loaded.TrySetResult();
+            }
+            root.Loaded += OnLoaded;
+            await loaded.Task;
+        }
+        await ShowAddressDialogAsync();
+    }
 
     private void OnOpenLogs(object sender, RoutedEventArgs e)
     {
@@ -444,7 +462,28 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>手动输入 Mac 的地址（IP 或主机名，xxx.local 也行），确认能解析再保存</summary>
+    /// <summary>同一时间只能开一个 ContentDialog，再开会抛异常（没接住的话整个 App 就退出了）</summary>
+    private bool _addressDialogOpen;
+
     private async Task ShowAddressDialogAsync()
+    {
+        if (_addressDialogOpen || Content?.XamlRoot is null) return;
+        _addressDialogOpen = true;
+        try
+        {
+            await RunAddressDialogAsync();
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException)
+        {
+            AppLog.Write(Strings.LogUnhandled(ex.HResult, ex));
+        }
+        finally
+        {
+            _addressDialogOpen = false;
+        }
+    }
+
+    private async Task RunAddressDialogAsync()
     {
         var box = new TextBox { PlaceholderText = "192.168.1.20", Text = _app.Settings.Target?.Host ?? "" };
         // 用 XAML 建，颜色才能跟着主题走（文字在代码里设：译文里的引号会破坏 XAML）

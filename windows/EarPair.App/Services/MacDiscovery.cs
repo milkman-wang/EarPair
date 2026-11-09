@@ -24,8 +24,12 @@ public sealed class MacDiscovery : IDisposable
 
     private readonly object _lock = new();
     private readonly Dictionary<string, DiscoveredMac> _macs = new();
-    /// <summary>每台 Mac 见过的全部地址：每次更新可能只带其中一部分</summary>
-    private readonly Dictionary<string, HashSet<string>> _addresses = new();
+    /// <summary>
+    /// 每台 Mac 见过的地址和最近一次报告它的时间（Environment.TickCount64）。每次更新可能只带其中一部分，所以合起来用；
+    /// 但别的地址刚报告过、这个地址已经 StaleAfter 没被报告（DHCP 换了 IP、Mac 换了网络），就去掉它，不然会一直连旧地址
+    /// </summary>
+    private readonly Dictionary<string, Dictionary<string, long>> _addresses = new();
+    private const long StaleAfter = 60_000;
     private DeviceWatcher? _watcher;
 
     public event Action? Changed;
@@ -81,9 +85,15 @@ public sealed class MacDiscovery : IDisposable
             string? name = properties.TryGetValue(Properties[0], out object? n) ? n as string : null;
             name ??= old?.Name;
             int port = properties.TryGetValue(Properties[2], out object? p) && p is not null ? Convert.ToInt32(p) : old?.Port ?? 0;
-            if (!_addresses.TryGetValue(id, out HashSet<string>? seen)) _addresses[id] = seen = [];
-            if (properties.TryGetValue(Properties[3], out object? a) && a is string[] list) seen.UnionWith(list);
-            string? address = AddressPicker.Pick(seen, old?.Address, AddressPicker.Current());
+            if (!_addresses.TryGetValue(id, out Dictionary<string, long>? seen)) _addresses[id] = seen = new();
+            if (properties.TryGetValue(Properties[3], out object? a) && a is string[] { Length: > 0 } list)
+            {
+                long now = Environment.TickCount64;
+                foreach (string reported in list) seen[reported] = now;
+                foreach (string stale in seen.Where(kv => now - kv.Value > StaleAfter).Select(kv => kv.Key).ToList())
+                    seen.Remove(stale);
+            }
+            string? address = AddressPicker.Pick(seen.Keys, old?.Address, AddressPicker.Current());
             if (name is null || address is null || port == 0) return; // 信息还不全，等 Updated
             string[]? text = properties.TryGetValue(Properties[4], out object? t) ? t as string[] : null;
             string? Txt(string key) =>

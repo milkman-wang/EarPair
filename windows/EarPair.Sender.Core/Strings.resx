@@ -121,4 +121,25 @@
     <value>State: {0}, {1}</value>
     <comment>{0}：状态名（英文标识，不翻译），{1}：错误</comment>
   </data>
+  <data name="NetworkUnavailable" xml:space="preserve">
+    <value>No network connection</value>
+  </data>
+  <data name="UnsupportedSampleRate" xml:space="preserve">
+    <value>{0} Hz isn't supported. Set this device to 192 kHz or lower in the Windows sound settings.</value>
+    <comment>{0}：采样率</comment>
+  </data>
+  <data name="LogProcessLoopbackRetry" xml:space="preserve">
+    <value>Trying process loopback again</value>
+  </data>
+  <data name="LogMuteSkippedUserUnmuted" xml:space="preserve">
+    <value>{0} was unmuted by hand while sending; not muting it again until sending is turned off</value>
+    <comment>{0}：设备名</comment>
+  </data>
+  <data name="LogMuteRestoreDeferred" xml:space="preserve">
+    <value>Couldn't unmute {0} because it's gone; it will be unmuted when it comes back</value>
+    <comment>{0}：设备名</comment>
+  </data>
+  <data name="LogMuteRestoredLater" xml:space="preserve">
+    <value>A device that was muted while sending came back and was unmuted</value>
+  </data>
 </root>

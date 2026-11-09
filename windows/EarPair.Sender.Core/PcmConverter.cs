@@ -5,13 +5,18 @@ namespace EarPair.Sender;
 
 /// <summary>
 /// 把 WASAPI 采到的 PCM / 浮点数据转成立体声 16-bit。
-/// 多声道按 Windows 标准顺序（FL FR FC LFE BL BR SL SR）混成立体声，LFE 丢弃。
+/// 多声道按 Windows 标准顺序（FL FR FC LFE BL BR SL SR）混成立体声，LFE 丢弃；
+/// 混合后按最大可能的和缩小（各声道都满幅时也不削顶），响度由 Mac 端的音量平衡补回来。
 /// </summary>
 public sealed class PcmConverter
 {
     private static readonly Guid SubtypePcm = new("00000001-0000-0010-8000-00aa00389b71");
     private static readonly Guid SubtypeIeeeFloat = new("00000003-0000-0010-8000-00aa00389b71");
     private const float SideGain = 0.7071f;
+    /// <summary>四声道（FL FR BL BR）、5.1、7.1 混成立体声后的缩放：1 / 一侧所有系数之和</summary>
+    private const float QuadScale = 1 / (1 + SideGain);
+    private const float Surround51Scale = 1 / (1 + 2 * SideGain);
+    private const float Surround71Scale = 1 / (1 + 3 * SideGain);
 
     private readonly int _channels;
     private readonly int _bytesPerSample;
@@ -54,18 +59,22 @@ public sealed class PcmConverter
                 case 1:
                     left = right = Sample(frame, 0);
                     break;
+                case 4: // 四声道：FL FR BL BR
+                    left = (Sample(frame, 0) + Sample(frame, 2) * SideGain) * QuadScale;
+                    right = (Sample(frame, 1) + Sample(frame, 3) * SideGain) * QuadScale;
+                    break;
                 case 6: // 5.1：FL FR FC LFE BL BR
                 {
                     float center = Sample(frame, 2) * SideGain;
-                    left = Sample(frame, 0) + center + Sample(frame, 4) * SideGain;
-                    right = Sample(frame, 1) + center + Sample(frame, 5) * SideGain;
+                    left = (Sample(frame, 0) + center + Sample(frame, 4) * SideGain) * Surround51Scale;
+                    right = (Sample(frame, 1) + center + Sample(frame, 5) * SideGain) * Surround51Scale;
                     break;
                 }
                 case 8: // 7.1：FL FR FC LFE BL BR SL SR
                 {
                     float center = Sample(frame, 2) * SideGain;
-                    left = Sample(frame, 0) + center + (Sample(frame, 4) + Sample(frame, 6)) * SideGain;
-                    right = Sample(frame, 1) + center + (Sample(frame, 5) + Sample(frame, 7)) * SideGain;
+                    left = (Sample(frame, 0) + center + (Sample(frame, 4) + Sample(frame, 6)) * SideGain) * Surround71Scale;
+                    right = (Sample(frame, 1) + center + (Sample(frame, 5) + Sample(frame, 7)) * SideGain) * Surround71Scale;
                     break;
                 }
                 default: // 立体声；其他布局只取前两个声道

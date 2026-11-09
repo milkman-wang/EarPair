@@ -30,21 +30,34 @@ public sealed class AudioCapture : ICapture
     {
         _capture = CreateLoopbackCapture(device);
         WaveFormat format = _capture.WaveFormat;
-        _converter = new PcmConverter(format);
-        SampleRate = format.SampleRate;
-        ChannelCount = format.Channels;
-        FormatDescription = CoreStrings.FormatDescription(format.SampleRate, format.Channels, format.BitsPerSample,
-                                                          PcmConverter.IsFloat(format));
-
-        _capture.DataAvailable += OnDataAvailable;
-        _capture.RecordingStopped += (_, e) => Stopped?.Invoke(e.Exception);
-
-        if (keepAlive)
+        try
         {
-            // Windows 完全没有声音时，loopback 采集不产生数据，Mac 端会判为断开。
-            // 在同一个设备上一直播放静音，让采集流保持连续。副作用：运行期间 Windows 不会自动睡眠。
-            _keepAlive = new WasapiOut(device, AudioClientShareMode.Shared, true, 100);
-            _keepAlive.Init(new SilenceProvider(format));
+            // Mac 只收 8–192 kHz（protocol/audio-packet.md）：设成 352.8、384 kHz 的设备发过去也放不出来
+            if (format.SampleRate is < 8_000 or > 192_000)
+                throw new NotSupportedException(CoreStrings.UnsupportedSampleRate(format.SampleRate));
+            _converter = new PcmConverter(format);
+            SampleRate = format.SampleRate;
+            ChannelCount = format.Channels;
+            FormatDescription = CoreStrings.FormatDescription(format.SampleRate, format.Channels, format.BitsPerSample,
+                                                              PcmConverter.IsFloat(format));
+
+            _capture.DataAvailable += OnDataAvailable;
+            _capture.RecordingStopped += (_, e) => Stopped?.Invoke(e.Exception);
+
+            if (keepAlive)
+            {
+                // Windows 完全没有声音时，loopback 采集不产生数据，Mac 端会判为断开。
+                // 在同一个设备上一直播放静音，让采集流保持连续。副作用：运行期间 Windows 不会自动睡眠。
+                _keepAlive = new WasapiOut(device, AudioClientShareMode.Shared, true, 100);
+                _keepAlive.Init(new SilenceProvider(format));
+            }
+        }
+        catch
+        {
+            // 构造失败时调用方拿不到对象，Dispose 不会被调用
+            _keepAlive?.Dispose();
+            _capture.Dispose();
+            throw;
         }
     }
 

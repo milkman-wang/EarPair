@@ -13,9 +13,11 @@ public static class CoreStrings
     private static readonly ResourceManager Resources = new(typeof(CoreStrings));
 
     public static string HostNotFound(string host) => Format(nameof(HostNotFound), host);
+    public static string NetworkUnavailable => Get(nameof(NetworkUnavailable));
     public static string DeviceUnavailable => Get(nameof(DeviceUnavailable));
     public static string DeviceInExclusiveUse => Get(nameof(DeviceInExclusiveUse));
     public static string UnsupportedFormat(string format) => Format(nameof(UnsupportedFormat), format);
+    public static string UnsupportedSampleRate(int sampleRate) => Format(nameof(UnsupportedSampleRate), sampleRate);
     public static string ControlPacketTooLong => Get(nameof(ControlPacketTooLong));
 
     /// <summary>采集格式，比如“48000 Hz, 2-channel, 32-bit float”</summary>
@@ -27,6 +29,7 @@ public static class CoreStrings
     public static string LogCaptureAllApps(string format, uint stream) =>
         Format(nameof(LogCaptureAllApps), format, stream.ToString("x8", CultureInfo.InvariantCulture));
     public static string LogProcessLoopbackUnavailable(string reason) => Format(nameof(LogProcessLoopbackUnavailable), reason);
+    public static string LogProcessLoopbackRetry => Get(nameof(LogProcessLoopbackRetry));
     public static string LogMacResponded(string? name, string? app) => Format(nameof(LogMacResponded), name, app);
     public static string LogStandby => Get(nameof(LogStandby));
     public static string LogResumed => Get(nameof(LogResumed));
@@ -43,10 +46,13 @@ public static class CoreStrings
     public static string LogMuteFailed(string device) => Format(nameof(LogMuteFailed), device);
     public static string LogMuteVerified(string device) => Format(nameof(LogMuteVerified), device);
     public static string LogUserUnmuted(string device) => Format(nameof(LogUserUnmuted), device);
+    public static string LogMuteSkippedUserUnmuted(string device) => Format(nameof(LogMuteSkippedUserUnmuted), device);
     /// <param name="othersPercent">其他程序在这个设备上的峰值（百分比）</param>
     public static string LogPostMuteSilent(string device, int othersPercent) =>
         Format(nameof(LogPostMuteSilent), device, othersPercent);
     public static string LogMuteRestored(string device) => Format(nameof(LogMuteRestored), device);
+    public static string LogMuteRestoreDeferred(string device) => Format(nameof(LogMuteRestoreDeferred), device);
+    public static string LogMuteRestoredLater => Get(nameof(LogMuteRestoredLater));
 
     /// <param name="state">状态名（SenderState 的英文标识，不翻译）</param>
     public static string LogState(string state) => Format(nameof(LogState), state);

@@ -179,10 +179,23 @@ void TestPcmConverter()
 
     // 5.1：FL FR FC LFE BL BR → 立体声
     short[] surround = Convert(new WaveFormatExtensible(48000, 32, 6), FloatBytes(0.1f, 0.2f, 0.3f, 0.9f, 0.05f, 0.04f));
-    double expectedLeft = (0.1 + 0.3 * 0.7071 + 0.05 * 0.7071) * 32768;
-    double expectedRight = (0.2 + 0.3 * 0.7071 + 0.04 * 0.7071) * 32768;
+    const double scale51 = 1 / (1 + 2 * 0.7071);
+    double expectedLeft = (0.1 + 0.3 * 0.7071 + 0.05 * 0.7071) * scale51 * 32768;
+    double expectedRight = (0.2 + 0.3 * 0.7071 + 0.04 * 0.7071) * scale51 * 32768;
     Check(surround.Length == 2 && Math.Abs(surround[0] - expectedLeft) <= 1 && Math.Abs(surround[1] - expectedRight) <= 1,
-          "5.1 混成立体声（中置和环绕按 0.707 混入，丢掉低音声道）");
+          "5.1 混成立体声（中置和环绕按 0.707 混入，丢掉低音声道，整体缩小）");
+
+    // 各声道都满幅：混合后不削顶
+    short[] loud51 = Convert(new WaveFormatExtensible(48000, 32, 6), FloatBytes(1f, -1f, 1f, 1f, 1f, -1f));
+    short[] loud71 = Convert(new WaveFormatExtensible(48000, 32, 8), FloatBytes(1f, 1f, 1f, 1f, 1f, 1f, 1f, 1f));
+    short[] loudQuad = Convert(new WaveFormatExtensible(48000, 32, 4), FloatBytes(1f, -1f, 1f, -1f));
+    Check(loud51[0] is > 32000 and <= 32767 && loud71[0] is > 32000 and <= 32767 && loudQuad[0] is > 32000 and <= 32767 &&
+          loudQuad[1] is < -32000 and >= -32768,
+          "5.1、7.1、四声道满幅混合后不超出范围");
+    short[] quad = Convert(new WaveFormatExtensible(48000, 32, 4), FloatBytes(0.2f, 0f, 0f, 0.4f));
+    const double scaleQuad = 1 / (1 + 0.7071);
+    Check(Math.Abs(quad[0] - 0.2 * scaleQuad * 32768) <= 1 && Math.Abs(quad[1] - 0.4 * 0.7071 * scaleQuad * 32768) <= 1,
+          "四声道（FL FR BL BR）的后置声道混进左右");
 
     short[] pcm16 = { 1234, -1234, 32767, -32768 };
     var pcm16Bytes = new byte[pcm16.Length * 2];

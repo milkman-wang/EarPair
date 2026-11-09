@@ -12,7 +12,7 @@ namespace EarPair.Sender;
 /// 有的声卡（实测：带硬件音量 / 静音的 Realtek High Definition Audio）静音后设备 loopback 只剩静音，
 /// “发送时本机静音”在那上面只能靠这种方式。代价是不再区分输出设备：放到哪个设备的声音都会采到。
 ///
-/// 系统不支持（较老的 Windows 10）时构造函数抛异常，引擎退回设备 loopback。
+/// 系统不支持（较老的 Windows 10）或者暂时激活不了时构造函数抛异常，引擎先退回设备 loopback，过一会儿再试。
 /// 必须在 MTA 线程上创建（引擎线程就是）。
 /// </summary>
 public sealed class ProcessLoopbackCapture : ICapture
@@ -66,18 +66,23 @@ public sealed class ProcessLoopbackCapture : ICapture
             Guid iid = typeof(IAudioCaptureClient).GUID;
             Marshal.ThrowExceptionForHR(_client.GetService(ref iid, out object service));
             _captureClient = (IAudioCaptureClient)service;
+
+            if (keepAliveDevice is not null)
+            {
+                // MMDevice.AudioClient 每次都新建一个，只用来读格式，用完就放掉
+                using AudioClient mixClient = keepAliveDevice.AudioClient;
+                _keepAlive = new WasapiOut(keepAliveDevice, AudioClientShareMode.Shared, true, 100);
+                _keepAlive.Init(new SilenceProvider(mixClient.MixFormat));
+            }
         }
         catch
         {
+            // 构造失败时调用方拿不到对象，Dispose 不会被调用：已经建好的都在这里放掉
+            _keepAlive?.Dispose();
+            if (_captureClient is not null) Marshal.ReleaseComObject(_captureClient);
             Marshal.ReleaseComObject(_client);
             _ready.Dispose();
             throw;
-        }
-
-        if (keepAliveDevice is not null)
-        {
-            _keepAlive = new WasapiOut(keepAliveDevice, AudioClientShareMode.Shared, true, 100);
-            _keepAlive.Init(new SilenceProvider(keepAliveDevice.AudioClient.MixFormat));
         }
     }
 

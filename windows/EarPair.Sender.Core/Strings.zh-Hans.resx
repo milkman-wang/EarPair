@@ -100,4 +100,22 @@
   <data name="LogStateWithError" xml:space="preserve">
     <value>状态：{0}，{1}</value>
   </data>
+  <data name="NetworkUnavailable" xml:space="preserve">
+    <value>没有网络连接</value>
+  </data>
+  <data name="UnsupportedSampleRate" xml:space="preserve">
+    <value>不支持 {0} Hz。请在 Windows 声音设置里把这个设备设为 192 kHz 或更低。</value>
+  </data>
+  <data name="LogProcessLoopbackRetry" xml:space="preserve">
+    <value>再试一次进程 loopback</value>
+  </data>
+  <data name="LogMuteSkippedUserUnmuted" xml:space="preserve">
+    <value>发送中 {0} 被手动取消了静音，关掉发送之前不再静音它</value>
+  </data>
+  <data name="LogMuteRestoreDeferred" xml:space="preserve">
+    <value>{0} 已经不在了，没能恢复声音；它回来时再恢复</value>
+  </data>
+  <data name="LogMuteRestoredLater" xml:space="preserve">
+    <value>发送时静音的设备回来了，已恢复声音</value>
+  </data>
 </root>

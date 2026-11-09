@@ -91,10 +91,11 @@ public partial class App : Application
         // 上次异常退出时留下的本机静音：恢复
         if (Settings.MutedByUs is { } leftover)
         {
-            SenderEngine.RestoreLeftoverMute(leftover);
+            // 设备现在不在（被拔掉了）：交给引擎，设备插回来时再恢复
+            if (SenderEngine.RestoreLeftoverMute(leftover)) AppLog.Write(Strings.LogRestoredMute);
+            else Engine.RestoreMuteWhenBack(leftover);
             Settings.MutedByUs = null;
             Settings.Save();
-            AppLog.Write(Strings.LogRestoredMute);
         }
         Autostart.FixPath();
 
@@ -135,7 +136,13 @@ public partial class App : Application
         _updateTimer.Interval = TimeSpan.FromSeconds(30);
         _updateTimer.Tick += (timer, _) =>
         {
-            timer.Interval = TimeSpan.FromHours(12);
+            // 运行中改 Interval，下一次还是按旧间隔触发（实测启动后 30 秒、60 秒各查了一次）：停下改好再开
+            if (timer.Interval != TimeSpan.FromHours(12))
+            {
+                timer.Stop();
+                timer.Interval = TimeSpan.FromHours(12);
+                timer.Start();
+            }
             CheckForUpdates(manual: false);
         };
         _updateTimer.Start();
@@ -301,7 +308,8 @@ public partial class App : Application
     {
         AppLog.Write(Strings.LogSessionEnding);
         Engine.StopAndWait(TimeSpan.FromSeconds(2));
-        Settings.MutedByUs = null;
+        // 静音的设备被拔掉了、没恢复成：留着记录，下次启动时恢复
+        Settings.MutedByUs = Engine.PendingMuteRestore;
         Settings.Save();
     }
 
@@ -388,7 +396,7 @@ public partial class App : Application
         Settings.Save();
         Discovery.Dispose();
         Engine.Dispose(); // 先停采集、恢复本机静音，再发 BYE
-        Settings.MutedByUs = null;
+        Settings.MutedByUs = Engine.PendingMuteRestore;
         Settings.Save();
         _tray?.Dispose();
         _updateTimer?.Stop();

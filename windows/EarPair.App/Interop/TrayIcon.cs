@@ -90,7 +90,14 @@ internal sealed partial class TrayIcon : IDisposable
     private void Add()
     {
         var data = CreateData(NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP);
-        _added = Shell_NotifyIconW(NIM_ADD, ref data);
+        // TaskbarCreated 有时在图标还在的时候也会来（任务栏、DPI 重置）：这时 NIM_ADD 会失败，先删掉再加
+        if (!Shell_NotifyIconW(NIM_ADD, ref data))
+        {
+            var old = CreateData(0);
+            Shell_NotifyIconW(NIM_DELETE, ref old);
+            Shell_NotifyIconW(NIM_ADD, ref data);
+        }
+        _added = true;
         data.uVersion = NOTIFYICON_VERSION_4;
         Shell_NotifyIconW(NIM_SETVERSION, ref data);
     }
@@ -218,6 +225,7 @@ internal sealed partial class TrayIcon : IDisposable
     {
         if (_added)
         {
+            // 加的时候失败过也删一次：删不存在的图标没有副作用，留下一个死图标就要等鼠标划过才消失
             var data = CreateData(0);
             Shell_NotifyIconW(NIM_DELETE, ref data);
             _added = false;

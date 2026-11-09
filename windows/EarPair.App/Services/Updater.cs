@@ -164,8 +164,10 @@ public sealed class Updater : IDisposable
 
             long received;
             string sha256;
-            using (HttpResponseMessage response = await _http.GetAsync(asset.DownloadUrl, HttpCompletionOption.ResponseHeadersRead)
-                                                             .ConfigureAwait(false))
+            // 连上了却一直不回响应头（代理、CDN 卡住）也要超时，不然一直停在“正在下载 0%”，之后也没法再检查更新
+            using var headers = new CancellationTokenSource(CheckTimeout);
+            using (HttpResponseMessage response = await _http.GetAsync(asset.DownloadUrl, HttpCompletionOption.ResponseHeadersRead,
+                                                                       headers.Token).ConfigureAwait(false))
             {
                 response.EnsureSuccessStatusCode();
                 long total = response.Content.Headers.ContentLength ?? asset.Size;
