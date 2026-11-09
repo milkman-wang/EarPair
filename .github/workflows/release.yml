@@ -18,8 +18,9 @@ on:
         type: boolean
         default: true
 
+# Build jobs only read the repository; the publish job alone can write releases
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.event.inputs.tag || github.ref_name }}
@@ -38,6 +39,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.SOURCE }}
+          persist-credentials: false
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -72,6 +74,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.SOURCE }}
+          persist-credentials: false
 
       - name: Toolchain
         run: |
@@ -94,10 +97,10 @@ jobs:
           app=macos/build/EarPair.app
           archs="$(lipo -archs "$app/Contents/MacOS/EarPair")"
           echo "Architectures: $archs"
+          # Intel Macs update themselves from this dmg too, so it has to be universal
           case "$(echo $archs | tr ' ' '\n' | sort | tr '\n' ' ')" in
-            "arm64 ") platform=macos-arm64 ;;
             "arm64 x86_64 ") platform=macos-universal ;;
-            *) echo "Unexpected architectures: $archs"; exit 1 ;;
+            *) echo "Expected a universal app (arm64 and x86_64), got: $archs"; exit 1 ;;
           esac
           ls "$app/Contents/Resources/EarPair_EarPairUI.bundle/Contents/Resources/zh-Hans.lproj/Localizable.strings"
           codesign --verify --deep --strict "$app"
@@ -127,6 +130,8 @@ jobs:
     needs: [windows, macos]
     if: github.event_name != 'workflow_dispatch' || inputs.publish
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
