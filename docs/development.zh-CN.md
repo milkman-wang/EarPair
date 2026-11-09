@@ -9,7 +9,7 @@
 ```
  Windows PC                                          Mac
 ┌──────────────────────────┐   UDP 47800    ┌──────────────────────────────────┐
-│ WASAPI loopback capture  │  audio (EARP)  │ reorder, conceal losses          │
+│ process loopback capture │  audio (EARP)  │ reorder, conceal losses          │
 │ 16-bit stereo PCM        │ ─────────────▶ │ auto jitter buffer, drift fix    │
 │ 5 ms packets             │                │ loudness leveling, limiter       │
 │                          │ ◀───────────── │ AVAudioEngine → system mixer     │
@@ -126,7 +126,7 @@ earpair-recv [--port N] [--buffer-ms N] [--duration S] [--stats S] [--no-drift] 
 dotnet run --project windows/EarPair.Sender -- <Mac 的 IP> [--port N] [--device "名称"] [--list-devices] [--frames N] [--no-keepalive]
 ```
 
-命令行版不会自动发现 Mac，也不会静音本机。不加 `--device` 时跟随系统默认输出设备。
+命令行版不会自动发现 Mac，也不会静音本机。不加 `--device` 时和托盘 App 一样采集所有 App 的声音；加了只采集那个输出设备。
 
 ## 日志
 
@@ -136,7 +136,7 @@ dotnet run --project windows/EarPair.Sender -- <Mac 的 IP> [--port N] [--device
 ## 已知限制
 
 - 没有加密和认证：同一网络里的设备都能往接收端发声音。配对码和包签名在计划中。
-- 只能采集整个输出设备。按 App 采集计划在 0.3。
+- 采集的是电脑上所有 App（或某个输出设备）的声音，还不能单独选择 App。
 - 发送期间 Windows 不会自动睡眠：发送端一直在播放静音，保证采集不中断。之前有回应的 Mac 连续 10 秒没有回应时，界面版和命令行版都会暂停（这时电脑可以睡眠），Mac 回来后自动继续；命令行版还可以用 `--no-keepalive` 关掉静音保活。
 - 按 Windows 的音量键会取消本机静音（系统行为）。把发送开关关掉再打开即可重新静音。loopback 采集的是调音量之前的声音，所以音量请在 Mac 上调。
 - 两边都还没有代码签名：Mac 每次重新构建后要重新允许“本地网络”，Windows 第一次运行时 SmartScreen 会提示。

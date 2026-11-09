@@ -6,6 +6,12 @@
 
 <p align="center">用 Mac 上的 AirPods 听 Windows 电脑的声音。</p>
 
+<p align="center">
+  <a href="https://github.com/milkman-wang/EarPair/releases/latest"><img src="https://img.shields.io/github/v/release/milkman-wang/EarPair" alt="最新版本"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-000000?logo=apple" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/Windows-10%202004%2B-0078D4?logo=windows" alt="Windows 10 2004+">
+</p>
+
 <p align="center"><a href="README.md">English</a> | <b>简体中文</b></p>
 
 <p align="center">
@@ -15,21 +21,23 @@
   </picture>
 </p>
 
-AirPods 一直连着 Mac。EarPair 把 Windows 电脑的声音经局域网送到 Mac，和 Mac 自己的声音一起播放。不用来回切换蓝牙，不用多接一根线，声音也不会离开你的局域网：没有账号，不上云，不收集任何数据。
+EarPair 把 Windows 电脑的声音经局域网传到 Mac，与 Mac 自己的声音混合后从 Mac 当前的输出设备（AirPods、耳机或扬声器）播放，耳机无需在两台电脑之间切换。无需账号，不经云端，不收集数据。
 
 ## 功能
 
-- **两台电脑，一副耳机。** 电脑的声音和 Mac 的声音一起，从 Mac 正在用的设备播放：AirPods、扬声器、耳机都行。
-- **自动找到 Mac。** Windows 端会列出局域网里的 Mac，点一下就开始，不用输入 IP。
-- **音量平衡。** 自动把电脑的声音调到稳定的响度，忽大忽小的声音也听得舒服。
-- **电脑不出声。** 发送时把电脑自己的扬声器静音，停止后恢复。
-- **不怕 Wi‑Fi 抖动。** 丢包、迟到的包、两台电脑的时钟差，都不会造成爆音或越拖越长的延迟。
-- **没声音时不传。** 电脑安静几秒后就停止传送音频，只和 Mac 保持握手，省电也省流量；一有声音马上接着放。
-- **分得清是停了还是断了。** 电脑连上或停止发送时，Mac 会弹通知；如果是网络断了，通知会说明，EarPair 也会自动重新连接。
-- **AirPods 空间音频。** 告诉 EarPair 一次 Mac 和电脑各在哪：之后电脑的声音从电脑屏幕那边来，Mac 的声音从 Mac 那边来，转头时都待在原处；没在看的那台移到一边、小一些。电脑停止发送时暂停，回来后自动继续。
-- **Mac 上自动更新。** EarPair 会去 GitHub 查新版本，在菜单栏点一下就下载、安装并重新打开。
-- **不打扰。** Mac 上待在菜单栏，Windows 上待在通知区域，还可以随 Windows 开机启动。
-- **Windows 免安装。** 解压就能用，自带 .NET 运行时。
+| 功能 | 作用 | 注意 |
+|---|---|---|
+| **自动发现** | Windows 端列出局域网内所有运行 EarPair 的 Mac（Bonjour）。 | Bonjour 不跨网段、访客网络和 VPN，这些情况请用 **输入地址**。 |
+| **声音采集** | 采集电脑上除 EarPair 外所有 App 的声音，取自电脑音量和静音之前（进程 loopback）。 | 只想采集某个输出设备时，在 **声音来源** 里选择。不支持进程 loopback 的 Windows 版本始终按输出设备采集。 |
+| **发送时本机静音** | 发送期间让电脑的扬声器静音，停止后恢复。 | 按 Windows 音量键会取消静音。少数声卡静音后无法采集，EarPair 会取消该设备的静音并提示。 |
+| **音量平衡**（Mac） | 把电脑声音的响度稳定在目标值（ITU‑R BS.1770）。 | 目标在 **声音 → 目标响度** 中设置。需要原始音量时请关闭。 |
+| **抗网络抖动**（Mac） | 重排迟到的包，对丢失的包做淡入淡出，补偿两台电脑的时钟差，并按近期网络状况自动设定缓冲（20–150 ms）。 | 在 **网络** 页关闭 **自动缓冲** 可改用固定缓冲。 |
+| **待机** | 电脑静音 3 秒后停止传输音频，只保持握手；一有声音立即恢复。 | 待机中的电脑仍占用 Mac。 |
+| **单路播放**（Mac） | Mac 同一时间只播放一台电脑。其他电脑显示 **Mac 正忙** 和正在播放的电脑名。 | Mac 空闲后自动开始。 |
+| **连接通知**（Mac） | 电脑连上、停止或网络断开时通知；断线后自动重连。 | 需要允许通知。 |
+| **空间音频**（Mac） | 配合支持头部追踪的 AirPods，电脑的声音来自电脑屏幕方向，Mac 的声音来自 Mac 屏幕方向，转头时位置不变；没在看的那一边音量降低。 | 在 **空间音频** 页面对两块屏幕各设置一次。**Mac 自己的声音也跟着转** 需要 macOS 14.2 或以上。 |
+| **自动更新** | 两端都从 GitHub Releases 检查新版本（Mac 启动时及每 6 小时，Windows 启动后不久及每 12 小时），一键安装。 | 只获取最新版本号。Mac 版需放在可写入的文件夹中，例如“应用程序”。 |
+| **后台运行** | Mac 上在菜单栏，Windows 上在通知区域；Windows 可 **开机时启动**。 | 发送期间电脑不会睡眠；Mac 连续 10 秒联系不上时暂停发送。 |
 
 <p align="center">
   <picture>
@@ -45,60 +53,96 @@ AirPods 一直连着 Mac。EarPair 把 Windows 电脑的声音经局域网送到
 
 ## 系统要求
 
-- **Mac**：macOS 14 或以上（macOS 26 起是 Liquid Glass 外观）
-- **电脑**：Windows 10（2004 版）或 Windows 11，x64 或 Arm64
-- 两台电脑在同一个局域网里
+| | Mac | 电脑 |
+|---|---|---|
+| **系统** | macOS 14 或以上 | Windows 10 2004 或以上、Windows 11 |
+| **处理器** | Apple 芯片或 Intel | x64 或 Arm64 |
+| **网络** | 与电脑在同一局域网 | 播放时约 1.6 Mbit/s |
+| **空间音频** | 支持头部追踪的 AirPods 或 Beats | — |
 
-界面有中文和英文，跟随系统语言。
+两端界面跟随系统语言：简体中文或英文。
 
-## 开始使用
+## 安装
 
-1. **在 Mac 上**从 [Releases](https://github.com/milkman-wang/EarPair/releases/latest) 下载 `EarPair-0.2.3-macos-universal.dmg`，打开后把 EarPair 拖进“应用程序”，再从那里打开它。
+1. **Mac**：从 [Releases](https://github.com/milkman-wang/EarPair/releases/latest) 下载 `EarPair-<版本>-macos-universal.dmg`，把 **EarPair** 拖进 **应用程序** 后从那里打开。询问本地网络权限时点 **允许**。
+2. **电脑**：下载 `EarPair-<版本>-win-x64-setup.exe`（Arm 电脑用 `win-arm64`）并运行。安装到当前用户，无需管理员权限。
+3. 在电脑上点一下你的 Mac。
 
-   EarPair 的窗口会打开，菜单栏里也会出现一个耳朵图标；关掉窗口后 EarPair 继续在菜单栏里运行。macOS 询问是否允许 EarPair 查找本地网络上的设备时，点 **允许**：电脑就是靠这个找到 Mac 的。通知也请允许，这样电脑连上、断开时你都会知道。
+### 权限与首次运行提示
 
-2. **在电脑上**从 [Releases](https://github.com/milkman-wang/EarPair/releases/latest) 下载 `EarPair-0.2.3-win-x64-setup.exe`（Arm 电脑用 `win-arm64`）并运行，装好后 EarPair 会自动打开。
+| 提示 | 平台 | 用途 | 拒绝后 |
+|---|---|---|---|
+| 本地网络 | Mac | 被发现、接收声音 | **系统设置 → 隐私与安全性 → 本地网络** |
+| 通知 | Mac | 连接通知 | 可选 |
+| 运动数据 | Mac | 空间音频 | **空间音频** 页点 **打开系统设置** |
+| 系统录音 | Mac 14.2+ | **Mac 自己的声音也跟着转** | 只有电脑的声音参与定位；**空间音频** 页点 **打开系统设置** |
+| “Apple 无法验证 EarPair” | Mac | 未签名 | **系统设置 → 隐私与安全性 → 仍要打开** |
+| “Windows 已保护你的电脑” | 电脑 | 安装程序未签名 | **更多信息 → 仍要运行** |
 
-3. **点一下你的 Mac**。电脑的声音就从 Mac 播放了，电脑自己的扬声器在你停止之前一直保持静音。
+> [!IMPORTANT]
+> 目前没有代码签名。macOS 会把每个新版本当成新 App，每次更新后都要重新允许本地网络权限。
 
-关掉窗口后，EarPair 会留在通知区域继续运行（Windows 11 可能把图标收在 **^** 里）。打开 **开机时启动**，重启后就不用再手动打开。
+## 安全与隐私
 
-> [!NOTE]
-> EarPair 还没有代码签名。第一次运行安装程序时 Windows 可能提示 **Windows 已保护你的电脑**：点 **更多信息 → 仍要运行**。在 Mac 上，如果 macOS 提示无法验证 EarPair，打开 **系统设置 → 隐私与安全**，点 **仍要打开**。Mac 版每个新版本都会再次询问本地网络权限。
-
-## 使用须知
-
-- **采集的是整台电脑的声音**，还不能单独选 App。按 App 采集在计划中。
-- **只在信任的网络里使用。** 声音还没有加密，同一网络里的设备都能往你的 Mac 发声音。
-- **发送期间电脑不会自动睡眠。** Mac 不在时会自动暂停发送，回来后自动继续。
-- **在 Mac 上调音量。** 电脑上的音量不影响你听到的声音，而且按 Windows 的音量键会取消电脑的静音；把发送关掉再打开即可重新静音。
-- **电脑上的 EarPair 会自己更新。** 启动后不久、之后每天两次，EarPair 会向 GitHub 查一下最新的版本号（不发送其他任何信息）。有新版本时窗口和通知区域会提示：点 **更新**，EarPair 会下载安装包、校验、关闭、装好后重新打开。也可以随时点 **⋯ → 检查更新**。手动运行新版安装程序也可以，它会自己关掉正在运行的 EarPair。
-- **从电脑上删除 EarPair**：在 Windows 的 **设置 → 应用** 里卸载。
+- 声音未加密传输，Mac 接受同一网络内任何设备发来的声音。请只在信任的网络中使用。
+- 唯一的外网请求是向 GitHub Releases API 检查更新。
 
 ## 常见问题
 
-| 问题 | 怎么办 |
+### 电脑上找不到 Mac
+
+1. 确认 Mac 上的 EarPair 正在运行：菜单栏里有耳朵图标。
+2. 两台电脑连同一个网络、同一网段。访客网络和开启了 AP 隔离（客户端隔离）的路由器会阻断设备之间的通信。
+3. Windows 网络设为 **专用网络**：**设置 → 网络和 Internet → WLAN 或以太网 → 网络配置文件类型**。
+4. 断开两台电脑上的 VPN。
+5. Mac 上在 **系统设置 → 隐私与安全性 → 本地网络** 里打开 EarPair。如果开了 macOS 防火墙，允许 EarPair 接收传入连接。
+6. 仍然找不到时，在电脑上点 **输入地址**，填 Mac 的 IP（等待连接时显示在菜单栏面板里，也可以在 **连接** 页查看）。EarPair 使用 UDP 端口 47800。
+
+### 其他问题
+
+| 现象 | 原因与解决 |
 |---|---|
-| 电脑上找不到 Mac | 两台电脑连同一个网络（不要用会隔离设备的访客网络），把 Windows 的网络设为 **专用网络**，关掉 VPN。在 Mac 上检查 **系统设置 → 隐私与安全 → 本地网络**。也可以点 **输入地址**，填 Mac 菜单栏面板里显示的 IP。 |
-| Mac 菜单栏里没有耳朵图标 | macOS 26 及以上：打开 **系统设置 → 菜单栏**，在 **允许在菜单栏显示** 里打开 EarPair。 |
-| Mac 上没有通知 | 在 **系统设置 → 通知 → EarPair** 里打开 **允许通知**。 |
-| 更新 Mac App 后用不了了 | 照上面的方法，再允许一次 EarPair 访问本地网络。 |
-| 电脑的扬声器又响了 | 按了 Windows 的音量键。把发送关掉再打开。 |
-| 其他问题 | 在 Windows 上打开 **⋯ → 打开日志文件夹**，看最新的日志。 |
+| **Mac 上的 EarPair 没有打开** | Mac 能连通，但 47800 端口没有程序监听。在 Mac 上打开 EarPair。 |
+| **连不上 Mac** | 数据包到不了 Mac，按上一节逐项检查。Mac 恢复可达后自动继续发送。 |
+| **等待 Mac**，但 Mac 上的 EarPair 已打开 | Mac 的回应到不了电脑，常见原因是电脑上的防火墙。点 **仍然发送**。 |
+| **Mac 正忙** | 另一台电脑正在往这台 Mac 播放。在那台电脑上停止发送。 |
+| **找不到声音来源** | Windows 没有可用的输出设备。连接或启用一个，或在 **声音来源** 里换一个。 |
+| Mac 显示 **无法接收** | 47800 端口被其他程序占用，例如另一个 EarPair 或 `earpair-recv`。退出该程序。 |
+| Mac 显示 **无法播放** | 没有可用的输出设备。在 **系统设置 → 声音 → 输出** 里选择一个。 |
+| 电脑显示 **正在播放**，但听不到 | 检查 Mac 菜单栏面板里的 **静音** 和音量，以及 Mac 的输出设备。 |
+| 爆音或断续 | Wi‑Fi 信号差。改用 5 GHz 或有线，并在 Mac 的 **网络** 页查看 **丢包**。关闭 **自动缓冲** 时可选更大的缓冲。 |
+| 电脑扬声器又响了 | 按了 Windows 音量键。把发送关掉再打开。 |
+| 空间音频打不开 | 给 Mac 连上支持头部追踪的 AirPods，并允许使用运动数据（**空间音频** 页点 **打开系统设置**）。 |
+| 空间音频听起来被处理了两次 | 在控制中心里为 EarPair 关闭 **空间化立体声**。 |
+| 声音位置不对 | 面向 Mac 点 **对准 Mac**，或点 **重新设置…**。 |
+| 菜单栏里没有耳朵图标 | macOS 26 及以上：**系统设置 → 菜单栏 → 允许在菜单栏显示**，打开 EarPair。 |
+| Mac 上没有通知 | **系统设置 → 通知 → EarPair → 允许通知**。 |
+| Mac 更新失败：“没法替换这个文件夹里的自己” | 把 EarPair 移到 **应用程序**，不要从磁盘映像或受保护的文件夹运行。 |
+| Mac 更新后用不了 | 重新允许本地网络权限。 |
+| 电脑更新失败 | 点 **打开下载页**，手动运行新版安装程序。 |
+
+### 日志
+
+- **Windows**：**⋯ → 打开日志文件夹**（`%LOCALAPPDATA%\EarPair\logs`，保留 7 天）。
+- **Mac**：`log stream --level info --predicate 'subsystem == "app.earpair"'`
+
+反馈问题时请附上 EarPair、Windows 和 macOS 的版本，以及相关日志。
 
 ## 工作原理
 
-Windows 端采集电脑正在播放的声音，以不压缩的音频经 UDP 发给 Mac。Mac 保持一小段缓冲，抹平丢包和两台电脑的时钟差，再像普通 App 一样播放，由 macOS 把它和其他声音混在一起。两边还会互相告诉对方名字和状态，所以两边都能画出完整的路线。包格式：[音频包](protocol/audio-packet.md)、[控制包](protocol/control-packet.md)。
+Windows 端采集电脑的声音，以不压缩的 16 位立体声 PCM、每包 5 ms 经 UDP 发给 Mac。Mac 缓冲音频流，补偿丢包和时钟漂移，经 AVAudioEngine 播放，由 macOS 与其他声音混合。同一端口上的控制通道传递名称、状态和待机信息。详见 [docs/development.zh-CN.md](docs/development.zh-CN.md)、[音频包](protocol/audio-packet.md)、[控制包](protocol/control-packet.md)。
 
 ## 从源码构建
 
-- **Mac**：`macos/scripts/build-app.sh`，需要 Xcode 26 或以上。
-- **Windows**：`powershell -ExecutionPolicy Bypass -File windows\build.ps1`，需要 [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)，不需要 Visual Studio。安装程序在 `dist\` 里（需要装 [Inno Setup 6](https://jrsoftware.org/isinfo.php)，没装时打 zip）。
+| 平台 | 命令 | 需要 |
+|---|---|---|
+| Mac | `macos/scripts/build-app.sh` | Xcode 26 或以上 |
+| Windows | `powershell -ExecutionPolicy Bypass -File windows\build.ps1` | [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)；打安装包需要 [Inno Setup 6](https://jrsoftware.org/isinfo.php)（没装时打 zip） |
 
-测试、工具和目录结构见 [docs/development.zh-CN.md](docs/development.zh-CN.md)。
+产物在 `macos/build/` 和 `dist\`。测试、工具和目录结构见 [docs/development.zh-CN.md](docs/development.zh-CN.md)。
 
 ## 路线图
 
 - 选择要发送的电脑 App
-- 配对、加密和代码签名
-- 空间音频：让电脑的声音从它屏幕的方向传来
+- 配对与加密
+- 代码签名与公证

@@ -6,6 +6,12 @@
 
 <p align="center">Hear your Windows PC through the AirPods on your Mac.</p>
 
+<p align="center">
+  <a href="https://github.com/milkman-wang/EarPair/releases/latest"><img src="https://img.shields.io/github/v/release/milkman-wang/EarPair" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-000000?logo=apple" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/Windows-10%202004%2B-0078D4?logo=windows" alt="Windows 10 2004+">
+</p>
+
 <p align="center"><b>English</b> | <a href="README.zh-CN.md">简体中文</a></p>
 
 <p align="center">
@@ -15,21 +21,23 @@
   </picture>
 </p>
 
-Your AirPods stay connected to your Mac. EarPair sends your Windows PC's sound over your local network, and the Mac plays it together with its own audio. No Bluetooth switching, no extra cables, and your audio never leaves your network: no account, no cloud, no telemetry.
+EarPair streams a Windows PC's audio to a Mac over the local network. The Mac mixes it with its own sound and plays both through its current output (AirPods, headphones or speakers), so the headphones never switch between computers. No account, no cloud service, no telemetry.
 
 ## Features
 
-- **Both computers in one pair of headphones.** The PC plays alongside the Mac, through whatever the Mac is using: AirPods, speakers or headphones.
-- **Finds your Mac by itself.** The Windows app lists the Macs on your network. Click one to start, no IP address needed.
-- **Even loudness.** Auto-leveling keeps quiet and loud PC audio at a steady volume.
-- **A quiet PC.** Mutes the PC's own speakers while sending and turns them back on when you stop.
-- **Rides out Wi‑Fi hiccups.** Lost or late packets and clock drift between the two machines don't cause clicks or a growing delay.
-- **Idle when the PC is quiet.** After a few seconds of silence the PC stops streaming and only keeps a light handshake with the Mac, saving battery and Wi‑Fi. Sound picks up again the moment something plays.
-- **Tells a stop from a dropout.** The Mac shows a notification when a PC connects or stops sending. If the network drops instead, the notification says so and EarPair reconnects by itself.
-- **Spatial audio with AirPods.** Show EarPair once where the Mac and the PC are. The PC's sound then comes from the PC's screen and the Mac's from the Mac's, and both stay put as you turn your head; the one you look away from moves aside and gets quieter. It pauses while the PC isn't sending and picks up again when it's back.
-- **Updates itself on the Mac.** EarPair checks GitHub for new versions; one click in the menu bar downloads, installs and reopens it.
-- **Stays out of the way.** It lives in the Mac's menu bar and in the Windows notification area, and can start with Windows.
-- **Nothing to install on Windows.** Unzip and run; the .NET runtime is included.
+| Feature | What it does | Notes |
+|---|---|---|
+| **Discovery** | The Windows app lists every Mac running EarPair on the local network (Bonjour). | Bonjour doesn't cross subnets, guest networks or VPNs. Use **Enter address** there. |
+| **Capture** | Captures every app on the PC except EarPair, before the PC's own volume and mute (process loopback). | To capture a single output device instead, pick it under **Sound source**. Windows builds without process loopback always capture an output device. |
+| **Mute this PC while sending** | Silences the PC's speakers while sending and restores them when sending stops. | The Windows volume keys unmute them. A few sound cards can't be captured while muted; EarPair then unmutes that device and says so. |
+| **Auto level** (Mac) | Holds the PC's loudness at a steady target (ITU‑R BS.1770). | Target under **Sound → Target loudness**. Turn it off when exact levels matter. |
+| **Network resilience** (Mac) | Reorders late packets, fades over lost ones, compensates the clock difference between the two machines and sizes the buffer from recent network conditions (20–150 ms). | Turn off **Auto buffer** on the **Network** page to set a fixed buffer. |
+| **Standby** | After 3 s of silence the PC stops streaming and keeps only a handshake. Sound resumes as soon as something plays. | A PC in standby still holds the Mac. |
+| **One PC at a time** (Mac) | The Mac plays one PC. Other PCs show **Mac is busy** and the name of the one playing. | They start automatically once the Mac is free. |
+| **Connection notices** (Mac) | Notifies when a PC connects, stops or drops off the network, and reconnects by itself after a dropout. | Requires notification permission. |
+| **Spatial audio** (Mac) | With head-tracking AirPods, the PC's sound comes from the PC's screen and the Mac's from the Mac's, fixed in place as you turn your head. The screen you look away from gets quieter. | Set up once on the **Spatial Audio** page by facing each screen. **Move this Mac's sound too** needs macOS 14.2 or later. |
+| **Updates** | Both apps check GitHub Releases (Mac at launch and every 6 h, Windows shortly after start and every 12 h) and install with one click. | Only the latest version number is requested. The Mac app must be in a folder it can write to, such as Applications. |
+| **Background operation** | Lives in the Mac menu bar and the Windows notification area. **Start at login** on Windows. | The PC doesn't sleep while sending; sending pauses after the Mac has been unreachable for 10 s. |
 
 <p align="center">
   <picture>
@@ -45,60 +53,96 @@ Your AirPods stay connected to your Mac. EarPair sends your Windows PC's sound o
 
 ## Requirements
 
-- **Mac:** macOS 14 or later (Liquid Glass on macOS 26 and later)
-- **PC:** Windows 10 (version 2004) or Windows 11, x64 or Arm64
-- Both on the same local network
+| | Mac | PC |
+|---|---|---|
+| **System** | macOS 14 or later | Windows 10 version 2004 or later, Windows 11 |
+| **Processor** | Apple silicon or Intel | x64 or Arm64 |
+| **Network** | Same local network as the PC | About 1.6 Mbit/s while playing |
+| **Spatial audio** | AirPods or Beats with head tracking | — |
 
-Both apps are in English and Simplified Chinese, following the system language.
+Both apps follow the system language: English or Simplified Chinese.
 
-## Getting started
+## Installation
 
-1. **On the Mac,** download `EarPair-0.2.3-macos-universal.dmg` from [Releases](https://github.com/milkman-wang/EarPair/releases/latest), open it, drag EarPair to Applications and open it from there.
+1. **Mac:** download `EarPair-<version>-macos-universal.dmg` from [Releases](https://github.com/milkman-wang/EarPair/releases/latest), drag **EarPair** to **Applications** and open it from there. Allow **Local Network** access when asked.
+2. **PC:** download `EarPair-<version>-win-x64-setup.exe` (`win-arm64` for Arm PCs) and run it. It installs for the current user, without administrator rights.
+3. On the PC, click your Mac in the list.
 
-   EarPair's window opens and an ear appears in the menu bar; closing the window keeps EarPair running there. When macOS asks whether EarPair may find devices on your local network, click **Allow**: that's how the PC finds the Mac. Allow notifications as well, so you know when a PC connects or drops off.
+### Permissions and first-run prompts
 
-2. **On the PC,** download `EarPair-0.2.3-win-x64-setup.exe` (`win-arm64` for Arm PCs) from [Releases](https://github.com/milkman-wang/EarPair/releases/latest) and run it. EarPair opens when setup finishes.
+| Prompt | Platform | Needed for | If declined |
+|---|---|---|---|
+| Local Network | Mac | Discovery and receiving audio | **System Settings → Privacy & Security → Local Network** |
+| Notifications | Mac | Connection notices | Optional |
+| Motion | Mac | Spatial audio | **Open System Settings** on the **Spatial Audio** page |
+| System Audio Recording | Mac 14.2+ | **Move this Mac's sound too** | Only the PC's sound is placed; **Open System Settings** on the **Spatial Audio** page |
+| "Apple could not verify EarPair" | Mac | Unsigned build | **System Settings → Privacy & Security → Open Anyway** |
+| "Windows protected your PC" | PC | Unsigned installer | **More info → Run anyway** |
 
-3. **Click your Mac** in the list. The PC's sound now plays on the Mac, and the PC's speakers stay quiet until you stop.
+> [!IMPORTANT]
+> Builds aren't code-signed yet. macOS treats every new version as a new app and asks for Local Network access again after each update.
 
-Closing the window keeps EarPair running in the notification area (Windows 11 may tuck the icon under **^**). Turn on **Start at login** to have it ready after a restart.
+## Security and privacy
 
-> [!NOTE]
-> EarPair isn't code-signed yet. The first time you run setup, Windows may show **Windows protected your PC**: click **More info → Run anyway**. On the Mac, if macOS says it can't verify EarPair, open **System Settings → Privacy & Security** and click **Open Anyway**. Each new version of the Mac app asks for local network access again.
-
-## Good to know
-
-- **Every app on the PC is captured** (EarPair itself excepted), whichever speakers it plays to. To send just one output device instead, pick it under **Sound source**. Per-app capture is planned.
-- **Use it on networks you trust.** Audio isn't encrypted yet, and anything on the network can send to your Mac.
-- **The PC stays awake while sending.** Sending pauses by itself when the Mac goes away and resumes when it's back.
-- **Set the volume on the Mac.** The PC's own volume doesn't change what you hear, and the Windows volume keys unmute the PC's speakers; switch sending off and on to mute them again.
-- **The PC app updates itself.** Shortly after it starts, and twice a day after that, EarPair asks GitHub for the latest release (nothing else is sent). When there's a new version, the window and the notification area say so: click **Update** and EarPair downloads the installer, checks it, closes, updates and opens again. You can also check any time under **⋯ → Check for updates**. Running a newer setup by hand works too; it closes EarPair by itself.
-- **To remove EarPair from the PC,** uninstall it in Windows **Settings → Apps**.
+- Audio is sent unencrypted, and the Mac accepts audio from any device on the network. Use EarPair only on networks you trust.
+- The only internet traffic is the update check against the GitHub Releases API.
 
 ## Troubleshooting
 
-| Problem | What to do |
+### The PC doesn't list the Mac
+
+1. Check that EarPair is running on the Mac: the ear icon is in the menu bar.
+2. Put both computers on the same network and subnet. Guest networks and routers with AP or client isolation block traffic between devices.
+3. On Windows, set the network profile to **Private**: **Settings → Network & internet → Wi‑Fi or Ethernet → Network profile type**.
+4. Disconnect VPNs on both computers.
+5. On the Mac, turn on EarPair under **System Settings → Privacy & Security → Local Network**. If the macOS firewall is on, allow incoming connections for EarPair.
+6. If the Mac still isn't listed, click **Enter address** on the PC and type the Mac's IP address, shown in the Mac's menu bar panel while it waits and on the **Connection** page. EarPair uses UDP port 47800.
+
+### Other problems
+
+| Symptom | Cause and fix |
 |---|---|
-| The PC doesn't list your Mac | Use the same network on both (not a guest network that keeps devices apart), set the Windows network profile to **Private network**, and turn off any VPN. On the Mac, check **System Settings → Privacy & Security → Local Network**. You can also click **Enter address** and type the Mac's IP, shown in the Mac's menu bar panel. |
-| No ear in the Mac's menu bar | On macOS 26 and later, open **System Settings → Menu Bar** and turn on EarPair under **Allow in the Menu Bar**. |
-| No notifications on the Mac | Open **System Settings → Notifications → EarPair** and turn on **Allow Notifications**. |
-| It stopped working after updating the Mac app | Allow local network access for EarPair again, as above. |
-| The PC's speakers are playing again | The Windows volume keys unmuted them. Switch sending off and on. |
-| Something else | On Windows, open **⋯ → Open log folder** and look at the latest log. |
+| **EarPair isn't open on the Mac** | The Mac is reachable but nothing listens on port 47800. Open EarPair on the Mac. |
+| **Can't reach the Mac** | Packets aren't getting through. Work through the list above. Sending resumes when the Mac is reachable again. |
+| **Waiting for the Mac**, although EarPair is open on it | The Mac's replies don't reach the PC, often because of a firewall on the PC. Click **Send anyway**. |
+| **Mac is busy** | Another PC is playing on the Mac. Stop sending on that PC. |
+| **No sound source** | Windows has no active output device. Connect or enable one, or pick another under **Sound source**. |
+| Mac shows **Can't receive** | Another program uses port 47800, for example a second copy of EarPair or `earpair-recv`. Quit it. |
+| Mac shows **Can't play** | No usable output device. Select one under **System Settings → Sound → Output**. |
+| PC shows **Playing**, but nothing is heard | Check **Mute** and the volume in the Mac's menu bar panel, and the Mac's output device. |
+| Crackles or dropouts | Weak Wi‑Fi. Use 5 GHz or Ethernet and check **Packet loss** on the Mac's **Network** page. With **Auto buffer** off, choose a larger buffer. |
+| The PC's speakers play again | The Windows volume keys unmuted them. Turn sending off and on. |
+| Spatial audio can't be turned on | Connect head-tracking AirPods to the Mac and allow motion data (**Open System Settings** on the **Spatial Audio** page). |
+| Spatial audio sounds processed twice | Turn off **Spatialize Stereo** for EarPair in Control Center. |
+| Sound sits in the wrong place | Face the Mac and click **Center on Mac**, or **Set Up Again…**. |
+| No ear icon in the menu bar | macOS 26 and later: **System Settings → Menu Bar → Allow in the Menu Bar**, turn on EarPair. |
+| No notifications | **System Settings → Notifications → EarPair → Allow Notifications**. |
+| Mac update fails with "can't replace itself" | Move EarPair to **Applications** instead of running it from the disk image or another protected folder. |
+| Stopped working after a Mac update | Allow Local Network access again. |
+| PC update fails | Click **Open download page** and run the new installer by hand. |
+
+### Logs
+
+- **Windows:** **⋯ → Open log folder** (`%LOCALAPPDATA%\EarPair\logs`, kept for 7 days).
+- **Mac:** `log stream --level info --predicate 'subsystem == "app.earpair"'`
+
+When reporting a problem, include the EarPair, Windows and macOS versions and the relevant log.
 
 ## How it works
 
-The Windows app captures what the PC is playing and streams it to the Mac as uncompressed audio over UDP. It takes each app's sound before it reaches the speakers (Windows process loopback), so muting the PC or turning its volume down doesn't change what the Mac gets — on some sound cards, capturing the speakers' output instead goes silent as soon as they're muted. On older Windows 10, or when you pick a specific output device, it captures that device's output. The Mac keeps a short buffer, smooths over lost packets and the clock difference between the two machines, and plays the stream like any other app, so macOS mixes it with everything else. The two apps also swap names and status, which is how both can draw the whole route. Packet formats: [audio](protocol/audio-packet.md), [control](protocol/control-packet.md).
+The Windows app captures the PC's audio and sends it to the Mac as uncompressed 16‑bit stereo PCM over UDP, in 5 ms packets. The Mac buffers the stream, conceals losses, corrects clock drift and plays it through AVAudioEngine, so macOS mixes it with everything else. A control channel on the same port carries names, status and standby. Details: [docs/development.md](docs/development.md), [audio packets](protocol/audio-packet.md), [control packets](protocol/control-packet.md).
 
 ## Building from source
 
-- **Mac:** `macos/scripts/build-app.sh` with Xcode 26 or later.
-- **Windows:** `powershell -ExecutionPolicy Bypass -File windows\build.ps1` with the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). No Visual Studio needed. The installers land in `dist\` (with [Inno Setup 6](https://jrsoftware.org/isinfo.php); zips without it).
+| Platform | Command | Requires |
+|---|---|---|
+| Mac | `macos/scripts/build-app.sh` | Xcode 26 or later |
+| Windows | `powershell -ExecutionPolicy Bypass -File windows\build.ps1` | [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0); [Inno Setup 6](https://jrsoftware.org/isinfo.php) for installers (zips without it) |
 
-Tests, tools and the project layout are in [docs/development.md](docs/development.md).
+Output goes to `macos/build/` and `dist\`. Tests, tools and the project layout: [docs/development.md](docs/development.md).
 
 ## Roadmap
 
 - Choose which PC apps to send
-- Pairing, encryption and signed builds
-- Spatial audio that places the PC's sound toward its screen
+- Pairing and encryption
+- Signed and notarized builds

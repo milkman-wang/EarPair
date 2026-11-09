@@ -9,7 +9,7 @@ How to build EarPair from source, run the tests, and find your way around the co
 ```
  Windows PC                                          Mac
 ┌──────────────────────────┐   UDP 47800    ┌──────────────────────────────────┐
-│ WASAPI loopback capture  │  audio (EARP)  │ reorder, conceal losses          │
+│ process loopback capture │  audio (EARP)  │ reorder, conceal losses          │
 │ 16-bit stereo PCM        │ ─────────────▶ │ auto jitter buffer, drift fix    │
 │ 5 ms packets             │                │ loudness leveling, limiter       │
 │                          │ ◀───────────── │ AVAudioEngine → system mixer     │
@@ -126,7 +126,7 @@ earpair-recv [--port N] [--buffer-ms N] [--duration S] [--stats S] [--no-drift] 
 dotnet run --project windows/EarPair.Sender -- <Mac IP> [--port N] [--device "name"] [--list-devices] [--frames N] [--no-keepalive]
 ```
 
-The command-line sender doesn't discover Macs and doesn't mute the PC's speakers. Without `--device` it follows the system default output.
+The command-line sender doesn't discover Macs and doesn't mute the PC's speakers. Without `--device` it captures every app, like the tray app; with `--device` it captures only that output device.
 
 ## Logs
 
@@ -136,7 +136,7 @@ The command-line sender doesn't discover Macs and doesn't mute the PC's speakers
 ## Known limitations
 
 - No encryption or authentication: anything on the network can send audio to the receiver. A pairing code and signed packets are planned.
-- Captures the whole output device. Per-app capture is planned for 0.3.
+- Captures every app on the PC (or one output device); choosing individual apps isn't possible yet.
 - Windows doesn't sleep while sending, because the sender keeps a silent stream playing so capture never stalls. When a Mac that has been answering goes quiet for 10 seconds, both the app and the CLI pause (and the PC can sleep) until it's back; the CLI can also drop the silent stream with `--no-keepalive`.
 - Pressing the Windows volume keys unmutes the PC's speakers (system behavior). Turn sending off and on again to mute them. Loopback capture is taken before the Windows volume, so set the volume on the Mac.
 - Neither app is code-signed yet: macOS asks for Local Network permission after each rebuild, and Windows SmartScreen warns on first run.
