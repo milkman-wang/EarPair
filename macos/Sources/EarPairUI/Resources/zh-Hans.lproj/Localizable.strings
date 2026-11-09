@@ -134,6 +134,7 @@
 "Start Over" = "重来";
 "Cancel" = "取消";
 "Didn’t catch that. Hold still for a moment while facing each screen." = "没记下来。正对每块屏幕时，头稳住一会儿。";
+"No head tracking data. Wear AirPods that support head tracking and allow EarPair to use motion data." = "收不到头部追踪数据。请戴上支持头部追踪的 AirPods，并允许 EarPair 使用运动数据。";
 "Try Again" = "重试";
 "Move this Mac’s sound too" = "Mac 自己的声音也跟着转";
 "Allow EarPair to record system audio in System Settings." = "请在系统设置里允许 EarPair 录制系统声音。";

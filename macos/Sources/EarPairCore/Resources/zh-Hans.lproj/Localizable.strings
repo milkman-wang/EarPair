@@ -11,5 +11,7 @@
 "The download failed: %@" = "下载失败：%@";
 "The download is damaged." = "下载的文件损坏了。";
 "The package doesn’t contain a valid EarPair." = "安装包里没有完好的 EarPair。";
+"This version of EarPair needs macOS %@ or later." = "这个版本的 EarPair 需要 macOS %@ 或以上。";
+"This version of EarPair doesn’t run on this Mac’s processor." = "这个版本的 EarPair 不能在这台 Mac 的处理器上运行。";
 "EarPair can’t replace itself in this folder." = "EarPair 没法替换这个文件夹里的自己。";
 "Installing failed: %@" = "安装失败：%@";

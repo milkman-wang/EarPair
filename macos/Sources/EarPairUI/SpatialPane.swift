@@ -171,6 +171,21 @@ struct SpatialSetupView: View {
                     Button { spatial.beginSetup() } label: { Text("Try Again", bundle: .module) }
                         .keyboardShortcut(.defaultAction)
                 }
+            case .noData:
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.system(size: 34))
+                    .foregroundStyle(.orange)
+                Text("No head tracking data. Wear AirPods that support head tracking and allow EarPair to use motion data.",
+                     bundle: .module)
+                    .multilineTextAlignment(.center)
+                HStack(spacing: 10) {
+                    cancel
+                    if HeadTracker.authorization == .denied {
+                        Button { spatial.openMotionSettings() } label: { Text("Open System Settings", bundle: .module) }
+                    }
+                    Button { spatial.beginSetup() } label: { Text("Try Again", bundle: .module) }
+                        .keyboardShortcut(.defaultAction)
+                }
             }
         }
         .frame(maxWidth: .infinity)

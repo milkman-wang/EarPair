@@ -113,7 +113,7 @@ public final class ReceiverCore: @unchecked Sendable {
         public var reorderWindow = 3
         /// 多久收不到包算断开（秒）
         public var streamTimeout = 1.0
-        /// 待机时多久收不到 HELLO 算断开（秒）：发送端每 2 秒发一次
+        /// 待机时多久收不到 HELLO 算断开（秒）：发送端每秒发一次
         public var standbyTimeout = 6.0
         /// 用静音补上的最长缺口（秒），更长就清空缓冲重新开始
         public var maxConcealDuration = 0.25
@@ -369,7 +369,7 @@ public final class ReceiverCore: @unchecked Sendable {
         }
     }
 
-    /// 发送端说它那边没有声音、暂停发包了（HELLO 里 standby，每 2 秒一次）：当前流进入待机。
+    /// 发送端说它那边没有声音、暂停发包了（HELLO 里 standby，每秒一次）：当前流进入待机。
     /// 待机时不按 1 秒没包算断开、不算卡顿，HELLO 停了才算断开；它暂停前最后几个包是静音，缓冲直接清掉。
     /// 恢复不看 HELLO（可能乱序），看音频包：序号到了 `resumeSequence` 的包来了就恢复。
     public func enterStandby(stream id: UInt32, from sender: String, resumeSequence: UInt32?, now: Double) {
@@ -392,10 +392,11 @@ public final class ReceiverCore: @unchecked Sendable {
 
     /// 发送端说它停了（控制包 BYE）：是当前流就立即进入 idle，不等超时。
     /// 之后同一个流迟到的包都忽略，不会再“连上”一次；同一个发送端换了新流照常开始。
+    /// 已经按超时结束了（BYE 比超时晚到）也要记下原因：是手动停止就不再当成网络断开去重连。
     public func endStream(_ id: UInt32, from sender: String, reason: EndReason = .stopped) {
         lock.withLock {
-            guard let s = stream, s.id == id, s.senderAddress == sender, state != .idle else { return }
-            endStreamLocked()
+            guard let s = stream, s.id == id, s.senderAddress == sender else { return }
+            if state != .idle { endStreamLocked() }
             endedStream = EndedStream(sender: sender, id: id)
             lastEndReason = reason
         }

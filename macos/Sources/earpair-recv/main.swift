@@ -42,7 +42,7 @@ func parseOptions() -> Options {
         return value
     }
     func number(for name: String) -> Double {
-        guard let number = Double(value(for: name)) else { fail("\(name) 需要一个数字") }
+        guard let number = Double(value(for: name)), number.isFinite, abs(number) < 1e9 else { fail("\(name) 需要一个数字") }
         return number
     }
     while let argument = arguments.popFirst() {
@@ -57,7 +57,10 @@ func parseOptions() -> Options {
         case "--null-output": options.nullOutput = true
         case "--record": options.recordPath = value(for: argument)
         case "--clock-ppm": options.clockPPM = number(for: argument)
-        case "--rate": options.sampleRate = number(for: argument)
+        case "--rate":
+            let rate = number(for: argument)
+            guard rate > 0 else { fail("采样率无效") }
+            options.sampleRate = rate
         case "-h", "--help":
             print(usage)
             exit(0)

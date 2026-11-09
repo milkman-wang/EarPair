@@ -31,6 +31,10 @@ public enum UpdateError: Error, LocalizedError, Equatable {
     case download(String)
     case corrupted
     case invalidPackage
+    /// 新版要求的 macOS 比这台的新
+    case needsNewerSystem(String)
+    /// 新版里没有这台 Mac 能运行的处理器架构
+    case unsupportedProcessor
     case notWritable
     case install(String)
 
@@ -46,6 +50,10 @@ public enum UpdateError: Error, LocalizedError, Equatable {
             return String(localized: "The download is damaged.", bundle: .module)
         case .invalidPackage:
             return String(localized: "The package doesn’t contain a valid EarPair.", bundle: .module)
+        case .needsNewerSystem(let version):
+            return String(localized: "This version of EarPair needs macOS \(version) or later.", bundle: .module)
+        case .unsupportedProcessor:
+            return String(localized: "This version of EarPair doesn’t run on this Mac’s processor.", bundle: .module)
         case .notWritable:
             return String(localized: "EarPair can’t replace itself in this folder.", bundle: .module)
         case .install(let reason):
@@ -176,7 +184,7 @@ public enum Updater {
     }
 
     /// 挂载 dmg，把里面的 EarPair.app 复制到 target 旁边（同一个文件夹，换的时候只是改名），
-    /// 检查 bundle id、版本号和签名完整。返回复制好的那份
+    /// 检查 bundle id、版本号、能不能在这台 Mac 上运行（系统版本、处理器）和签名完整。返回复制好的那份
     public static func stage(dmg: URL, expectedVersion: String, beside target: URL,
                              bundleID: String = "app.earpair.EarPair") throws -> URL {
         let parent = target.deletingLastPathComponent()
@@ -190,11 +198,20 @@ public enum Updater {
         defer { _ = try? run("/usr/bin/hdiutil", ["detach", mount.path, "-force"]) }
         let source = mount.appendingPathComponent("EarPair.app")
         let staged = parent.appendingPathComponent(".EarPair-\(expectedVersion)-\(UUID().uuidString.prefix(8)).app")
-        try run("/usr/bin/ditto", [source.path, staged.path])
         do {
+            // 复制到一半失败（比如磁盘满了）也要把半份删掉
+            try run("/usr/bin/ditto", [source.path, staged.path])
             let info = NSDictionary(contentsOf: staged.appendingPathComponent("Contents/Info.plist"))
             guard info?["CFBundleIdentifier"] as? String == bundleID,
                   info?["CFBundleShortVersionString"] as? String == expectedVersion else { throw UpdateError.invalidPackage }
+            // 换上之后旧版就删了：打不开的新版不能换上
+            if let minimum = info?["LSMinimumSystemVersion"] as? String, !systemIsAtLeast(minimum) {
+                throw UpdateError.needsNewerSystem(minimum)
+            }
+            if let architectures = Bundle(url: staged)?.executableArchitectures?.map(\.intValue),
+               Set(architectures).isDisjoint(with: runnableArchitectures) {
+                throw UpdateError.unsupportedProcessor
+            }
             do {
                 try run("/usr/bin/codesign", ["--verify", "--deep", "--strict", staged.path])
             } catch {
@@ -207,6 +224,24 @@ public enum Updater {
             throw error
         }
         return staged
+    }
+
+    /// 这台 Mac 的系统版本不低于 version（"14.0"、"15"、"14.2.1" 这样的写法）
+    static func systemIsAtLeast(_ version: String) -> Bool {
+        let parts = version.split(separator: ".").map { Int($0) ?? 0 }
+        let required = OperatingSystemVersion(majorVersion: parts.count > 0 ? parts[0] : 0,
+                                              minorVersion: parts.count > 1 ? parts[1] : 0,
+                                              patchVersion: parts.count > 2 ? parts[2] : 0)
+        return ProcessInfo.processInfo.isOperatingSystemAtLeast(required)
+    }
+
+    /// 这台 Mac 能运行的架构：Apple 芯片两种都行（Intel 的经 Rosetta），Intel 的 Mac 只有 x86_64
+    static var runnableArchitectures: Set<Int> {
+        var arm64: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        let appleSilicon = sysctlbyname("hw.optional.arm64", &arm64, &size, nil, 0) == 0 && arm64 == 1
+        return appleSilicon ? [NSBundleExecutableArchitectureARM64, NSBundleExecutableArchitectureX86_64]
+                            : [NSBundleExecutableArchitectureX86_64]
     }
 
     /// 交给一个小脚本：等进程 pid 退出，把 target 换成 staged（失败就放回原来的），再打开 target。

@@ -17,6 +17,8 @@ public final class SpatialController: ObservableObject {
         /// 两步都记下了，等用户保存：发送端在 Mac 左边多少度（右边为负）
         case review(angle: Double)
         case failed
+        /// 收不到头部数据（没戴支持头部追踪的耳机，或者不允许读运动数据）
+        case noData
     }
 
     /// 用户的开关
@@ -86,6 +88,8 @@ public final class SpatialController: ObservableObject {
     nonisolated static let senderGrace = ConnectionNoticePolicy.graceSeconds
     /// 关掉空间音频后头部数据再读这么久（秒）：很快又打开时方向接得上，不用重新找
     nonisolated static let headKeepAlive = 600.0
+    /// 校准时这么久（秒）一直收不到头部数据就不等了
+    nonisolated static let setupNoDataTimeout = 15.0
 
     private let tracker: SpatialTracker
     private let head: HeadTracker?
@@ -97,6 +101,8 @@ public final class SpatialController: ObservableObject {
     private var ticks = 0
     private var terminationObserver: NSObjectProtocol?
     private var keepHeadUntil = -Double.infinity
+    /// 校准中从什么时候起收不到头部数据
+    private var setupNoDataSince: Double?
     private let recorder = SpatialRecorder()
     private var macPermission = SystemAudioPermission.Status.unknown
     private var askingPermission = false
@@ -189,14 +195,12 @@ public final class SpatialController: ObservableObject {
 
     // MARK: - 操作
 
-    /// 菜单栏面板上的开关：还没校准过时打开主窗口的空间音频页
+    /// 菜单栏面板上的开关：还没校准过时，打开的同时翻到主窗口的空间音频页去设置
     public func toggleFromPanel() {
-        if angle == nil {
-            enabled = true
+        enabled.toggle()
+        if enabled, angle == nil {
             pageRequest += 1
             _ = MainWindowOpener.shared.show()
-        } else {
-            enabled.toggle()
         }
     }
 
@@ -211,6 +215,7 @@ public final class SpatialController: ObservableObject {
         tracker.beginCalibration()
         setup = .mac
         setupProgress = 0
+        setupNoDataSince = nil
         refresh()
     }
 
@@ -236,8 +241,12 @@ public final class SpatialController: ObservableObject {
         refresh()
     }
 
-    /// 看着 Mac 时点：把 Mac 的方向定在现在的朝向
+    /// 看着 Mac 时点：把 Mac 的方向定在现在的朝向。收不到头部数据时不知道现在朝哪，不动
     public func recenter() {
+        guard head?.isReceiving == true else {
+            NSSound.beep()
+            return
+        }
         recorder.event("anchors_align", ["screen": "mac"])
         tracker.recenter()
         NSSound(named: "Tink")?.play()
@@ -261,7 +270,10 @@ public final class SpatialController: ObservableObject {
         ticks += 1
         let status = tracker.status()
         live.update(macRelative: status.macRelative, senderRelative: status.senderRelative)
-        if setup != nil { updateSetup(status) }
+        if setup != nil {
+            updateSetup(status)
+            checkSetupData()
+        }
         if ticks % 5 == 0 { refresh() }
         if ticks % 10 == 0 { recordState(status) }
         // 被拒绝时隔一会儿再查：用户可能去系统设置里打开了
@@ -290,6 +302,23 @@ public final class SpatialController: ObservableObject {
         if progress != setupProgress { setupProgress = progress }
     }
 
+    /// 校准的超时只在来样本时才算：一直没有样本（没戴耳机、不允许读运动数据）时在这里结束，不让界面一直等
+    private func checkSetupData() {
+        guard let head, setup == .mac || setup == .sender, !head.isReceiving else {
+            setupNoDataSince = nil
+            return
+        }
+        let now = MonotonicClock.now()
+        let since = setupNoDataSince ?? now
+        setupNoDataSince = since
+        guard HeadTracker.authorization == .denied || now - since > Self.setupNoDataTimeout else { return }
+        recorder.event("calib_no_data")
+        tracker.cancelCalibration()
+        setup = .noData
+        setupProgress = 0
+        setupNoDataSince = nil
+    }
+
     /// 算出现在用不用空间音频，跟着开关耳机的头部数据和音频图
     private func refresh() {
         guard isLive else { return }
@@ -303,9 +332,6 @@ public final class SpatialController: ObservableObject {
         case .waiting, .stopped, .receiveFailed:
             senderPresent = false
         }
-        let headphones = (head?.isConnected ?? false) && outputDevice?.transport == .bluetooth
-        let next = SpatialMode.decide(enabled: enabled, calibrated: angle != nil, authorization: HeadTracker.authorization,
-                                      headphones: headphones, senderPresent: senderPresent)
         // 头部数据：开着空间音频、发送端最近还在（一分钟内）或者正在校准时读；读不到耳机时也要读，才知道它什么时候连上
         let wantsHead = setup != nil
             || (angle != nil && linkState != .waiting && (enabled || now < keepHeadUntil))
@@ -318,6 +344,12 @@ public final class SpatialController: ObservableObject {
                 head.stop()
             }
         }
+        // 没在读头部数据时（发送端不在）不知道耳机支不支持头部追踪：只看声音是不是从蓝牙耳机出来，
+        // 免得戴着 AirPods 等电脑时也提示“需要支持头部追踪的耳机”
+        let bluetooth = outputDevice?.transport == .bluetooth
+        let headphones = bluetooth && (head.map { $0.isRunning ? $0.isConnected : true } ?? false)
+        let next = SpatialMode.decide(enabled: enabled, calibrated: angle != nil, authorization: HeadTracker.authorization,
+                                      headphones: headphones, senderPresent: senderPresent)
         if next != mode {
             if next == .active { macFailure = nil }
             mode = next

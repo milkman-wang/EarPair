@@ -40,6 +40,10 @@ public final class ControlResponder: @unchecked Sendable {
     /// 写进 STATUS 的功能：发送端看到 standby 才会在没声音时停发音频包
     static let features = ["standby"]
     static let statusInterval = 1.0
+    /// 同时回 STATUS 的发送端最多这么多个：谁都能发 HELLO，不设上限的话一堆假的来源会把接收线程拖慢
+    static let maxPeers = 16
+    /// 按地址记的名字、类型、来源超过这么多条时，只留还在联系的
+    static let maxAddresses = 64
 
     private let core: ReceiverCore
     private let send: (Data, UDPEndpoint) -> Void
@@ -96,6 +100,10 @@ public final class ControlResponder: @unchecked Sendable {
         case .hello:
             guard let hello = ControlPacket.decode(HelloMessage.self, from: body) else { return }
             lock.withLock {
+                if peers[sender] == nil, peers.count >= Self.maxPeers,
+                   let oldest = peers.min(by: { $0.value.lastSeen < $1.value.lastSeen })?.key {
+                    peers.removeValue(forKey: oldest)
+                }
                 peers[sender] = Peer(name: hello.name, stream: hello.stream ?? 0, lastSeen: now)
                 endpoints[sender.address] = sender
                 if let name = hello.name, !name.isEmpty { namesByAddress[sender.address] = name }
@@ -122,6 +130,14 @@ public final class ControlResponder: @unchecked Sendable {
         let (active, target): ([UDPEndpoint], UDPEndpoint?) = lock.withLock {
             peers = peers.filter { now - $0.value.lastSeen < 30 }
             if let current = reconnect, now >= current.until { reconnect = nil }
+            if endpoints.count > Self.maxAddresses || namesByAddress.count > Self.maxAddresses
+                || kindsByAddress.count > Self.maxAddresses {
+                var keep = Set(peers.keys.map(\.address))
+                if let target = reconnect?.endpoint { keep.insert(target.address) }
+                endpoints = endpoints.filter { keep.contains($0.key) }
+                namesByAddress = namesByAddress.filter { keep.contains($0.key) }
+                kindsByAddress = kindsByAddress.filter { keep.contains($0.key) }
+            }
             return (peers.filter { now - $0.value.lastSeen < Self.peerTimeout }.map(\.key), reconnect?.endpoint)
         }
         for peer in active { reply(to: peer, now: now) }

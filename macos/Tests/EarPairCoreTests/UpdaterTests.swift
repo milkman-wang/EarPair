@@ -1,10 +1,21 @@
 import CryptoKit
-import EarPairCore
+@testable import EarPairCore
 import Foundation
 import Testing
 
 @Suite("更新")
 struct UpdaterTests {
+    @Test("只换上这台 Mac 能运行的新版：系统版本够、有这台的处理器架构")
+    func compatibility() {
+        #expect(Updater.systemIsAtLeast("14.0"))
+        #expect(Updater.systemIsAtLeast("14"))
+        #expect(!Updater.systemIsAtLeast("99.0"))
+        #expect(Updater.runnableArchitectures.contains(NSBundleExecutableArchitectureX86_64))
+        #if arch(arm64)
+        #expect(Updater.runnableArchitectures.contains(NSBundleExecutableArchitectureARM64))
+        #endif
+    }
+
     @Test("版本比较：逐段按数字比，v 和预发布标记不算")
     func versionComparison() {
         #expect(Updater.isNewer("0.2.10", than: "0.2.9"))

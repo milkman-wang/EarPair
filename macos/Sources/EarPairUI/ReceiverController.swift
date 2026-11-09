@@ -205,6 +205,8 @@ public final class ReceiverController: ObservableObject {
     private var ticks = 0
     private var lastHistoryLost = 0
     private var lastHistoryUnderruns = 0
+    /// 曲线画的是哪个流：换了新的流就从头画，不和上一次连接的接在一起
+    private var historyStream: UInt32?
     private var outputMonitor: OutputDeviceMonitor?
     private var bufferingSince: Double?
     private var statsPublishedAt = -Double.infinity
@@ -419,6 +421,10 @@ public final class ReceiverController: ObservableObject {
         }
 
         ticks += 1
+        if current.isStreaming, let stream = current.streamID, stream != historyStream {
+            historyStream = stream
+            history.removeAll()
+        }
         if ticks % Self.historyInterval == 0 && current.isStreaming {
             let lost = max(0, current.packetsLost - lastHistoryLost)
             let underruns = max(0, current.underruns - lastHistoryUnderruns)

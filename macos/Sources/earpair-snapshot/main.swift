@@ -220,6 +220,7 @@ MainActor.assumeIsolated {
         ("setup-sender", SpatialController(preview: .needsSetup, enabled: true, angle: nil, setup: .sender)),
         ("setup-review", SpatialController(preview: .needsSetup, enabled: true, angle: nil, setup: .review(angle: 52))),
         ("setup-failed", SpatialController(preview: .needsSetup, enabled: true, angle: nil, setup: .failed)),
+        ("setup-nodata", SpatialController(preview: .needsSetup, enabled: true, angle: nil, setup: .noData)),
         ("waiting", SpatialController(preview: .waitingForSender, enabled: true, angle: -38, macRelative: 2,
                                       senderRelative: -36)),
         ("noheadphones", SpatialController(preview: .noHeadphones, enabled: true, angle: 52)),

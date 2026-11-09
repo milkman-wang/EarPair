@@ -159,6 +159,41 @@ struct ControlPacketTests {
         #expect(core.ingest(factory.packet(1), from: "10.0.0.2", at: 2.1) == .accepted)
     }
 
+    @Test("HELLO 的来源再多，每秒也只回有限几个 STATUS")
+    func peersAreCapped() {
+        let core = makeCore()
+        let outbox = Outbox()
+        let responder = makeResponder(core, outbox)
+        for port in 1...100 {
+            send(responder, .hello, HelloMessage(name: "PC \(port)"), from: UDPEndpoint(address: "10.0.1.\(port)", port: 1),
+                 at: Double(port) * 0.001)
+        }
+        outbox.sent.removeAll()
+        responder.tick(now: 1)
+        #expect(outbox.statuses.count == 16)
+        #expect(responder.senderName(for: "10.0.1.100") == "PC 100")
+        #expect(responder.senderName(for: "10.0.1.1") == nil, "超出上限、不再联系的来源不再记着")
+    }
+
+    @Test("超时之后才到的 BYE 照样记下原因：手动停止不再当成网络断开")
+    func byeAfterTimeout() {
+        let core = makeCore()
+        let responder = makeResponder(core, Outbox())
+        let factory = PacketFactory()
+        let pc = UDPEndpoint(address: "10.0.0.2", port: 1)
+        core.ingest(factory.packet(0), from: "10.0.0.2", at: 0)
+        core.housekeeping(now: 2)
+        #expect(core.statistics(now: 2).endReason == .network)
+        send(responder, .bye, ByeMessage(stream: factory.streamID, reason: "user"), from: pc, at: 2.5)
+        #expect(core.statistics(now: 2.5).endReason == .stopped)
+        // 别的电脑发来的 BYE 不算
+        send(responder, .bye, ByeMessage(stream: factory.streamID, reason: "device"),
+             from: UDPEndpoint(address: "10.0.0.9", port: 1), at: 2.6)
+        #expect(core.statistics(now: 2.6).endReason == .stopped)
+        // BYE 之后同一路流迟到的包忽略
+        #expect(core.ingest(factory.packet(1), from: "10.0.0.2", at: 2.7) == .ignored)
+    }
+
     @Test("HELLO 测试向量；kind 往返编解码，不认识的值当作未知；STATUS 带上接收端的 kind 和 headphones")
     func kindField() throws {
         let probe = try #require(ControlPacket.encode(.hello, HelloMessage(stream: 1)))
