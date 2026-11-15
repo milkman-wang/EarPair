@@ -63,8 +63,9 @@ func streaming(_ state: PlaybackState, input: Double, output: Double) -> Receive
     stats.format = StreamFormat(sampleRate: 48_000, channels: 2)
     stats.packetsReceived = 69_467
     stats.packetsLost = 3
-    stats.bufferedMs = 60.4
-    stats.targetMs = 60
+    // 自动缓冲在稳定的 Wi‑Fi 上的典型值
+    stats.bufferedMs = 26.3
+    stats.targetMs = 26
     stats.driftPPM = -1
     stats.jitterMs = 5.0
     stats.secondsPlayed = 340
@@ -81,7 +82,7 @@ func history(sound: Bool) -> [HistoryPoint] {
         let t = Double(i)
         let level = sound ? -20 + 9 * sin(t / 6) + 5 * sin(t / 1.7) : -120
         return HistoryPoint(id: i * 3, time: Date().addingTimeInterval(Double(i - 199) * 0.3),
-                            bufferMs: 60 + 3 * sin(t / 7), jitterMs: 5, inputLevelDB: level,
+                            bufferMs: 26 + 1.5 * sin(t / 7), jitterMs: 5, inputLevelDB: level,
                             outputLevelDB: level + 6, packetsLost: i == 120 ? 2 : i == 160 ? 1 : 0,
                             underruns: 0, muted: false)
     }
