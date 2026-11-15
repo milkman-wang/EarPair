@@ -149,6 +149,7 @@ public sealed partial class MainWindow : Window
             MuteSwitch.IsEnabled = !cannotMute;
             ToolTipService.SetToolTip(MuteSwitch, cannotMute ? Strings.CannotMuteDevice : null);
             StartupSwitch.IsOn = Autostart.IsEnabled;
+            AutoUpdateSwitch.IsOn = UpdatePreference.AutoCheck;
             UpdateMeterTimer();
         }
         finally
@@ -442,6 +443,12 @@ public sealed partial class MainWindow : Window
     {
         if (_updating) return;
         Autostart.SetEnabled(StartupSwitch.IsOn);
+    }
+
+    private void OnAutoUpdateToggled(object sender, RoutedEventArgs e)
+    {
+        if (_updating) return;
+        UpdatePreference.AutoCheck = AutoUpdateSwitch.IsOn;
     }
 
     private void OnAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)

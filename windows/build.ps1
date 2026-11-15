@@ -37,8 +37,9 @@ function Test-Publish([string]$dir) {
     if ($problems) { throw ("发布目录有问题：$dir`n  " + ($problems -join "`n  ")) }
 }
 
-[xml]$project = Get-Content (Join-Path $PSScriptRoot 'EarPair.App\EarPair.App.csproj')
-$version = ($project.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
+# 版本号在 Directory.Build.props（所有 Windows 程序共用）
+[xml]$props = Get-Content (Join-Path $PSScriptRoot 'Directory.Build.props')
+$version = ($props.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
 $work = Join-Path $env:TEMP 'earpair-publish'
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 

@@ -374,6 +374,9 @@ struct ConnectionPane: View {
                     }
                 }
             }
+            Section {
+                AutoUpdateToggle(updates: controller.updates)
+            }
         }
         .formStyle(.grouped)
         .animation(.smooth(duration: 0.3), value: controller.linkState)
@@ -388,4 +391,13 @@ func driftText(_ stats: ReceiverStats) -> String {
         return String(localized: "Measuring…", bundle: .module)
     }
     return Format.ppm(stats.driftPPM)
+}
+
+/// 自动检查更新的开关（单独订阅 UpdateController，连接页不用跟着更新状态重算）
+struct AutoUpdateToggle: View {
+    @ObservedObject var updates: UpdateController
+
+    var body: some View {
+        Toggle(isOn: $updates.autoCheck) { Text("Check for updates automatically", bundle: .module) }
+    }
 }

@@ -29,6 +29,7 @@ public static class Strings
     public static string SoundSource => Get(nameof(SoundSource));
     public static string MuteWhileSending => Get(nameof(MuteWhileSending));
     public static string StartAtLogin => Get(nameof(StartAtLogin));
+    public static string AutoCheckUpdates => Get(nameof(AutoCheckUpdates));
     public static string CannotMuteDevice => Get(nameof(CannotMuteDevice));
     public static string NameWithAddress(string name, string address) => Format(nameof(NameWithAddress), name, address);
     public static string SystemDefault => Get(nameof(SystemDefault));

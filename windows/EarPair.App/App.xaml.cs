@@ -129,7 +129,7 @@ public partial class App : Application
         Discovery.Changed += () => _dispatcher.TryEnqueue(OnDiscoveryChanged);
         Discovery.Start();
 
-        // 启动 30 秒后检查一次更新（不和开机时的网络、发送抢），之后每 12 小时一次
+        // 启动 30 秒后检查一次更新（不和开机时的网络、发送抢），之后每 12 小时一次；自动检查关掉了就不查
         Updater.Log += AppLog.Write;
         Updater.Changed += () => _dispatcher.TryEnqueue(OnUpdaterChanged);
         _updateTimer = _dispatcher.CreateTimer();
@@ -143,7 +143,7 @@ public partial class App : Application
                 timer.Interval = TimeSpan.FromHours(12);
                 timer.Start();
             }
-            CheckForUpdates(manual: false);
+            if (UpdatePreference.AutoCheck) CheckForUpdates(manual: false);
         };
         _updateTimer.Start();
 

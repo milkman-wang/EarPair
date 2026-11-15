@@ -1,0 +1,9 @@
+﻿EarPair talks to two kinds of computers.
+
+Your Mac. EarPair finds Macs on your local network (Bonjour) and sends this PC's sound only to the Mac you choose. The sound is not encrypted, so use EarPair on networks you trust.
+
+GitHub, for updates. About every 12 hours EarPair asks GitHub (api.github.com) whether a new version is out, and it downloads the installer from GitHub only when you choose to update. GitHub sees this PC's IP address, as with any web request. You can turn automatic checks off on the next page, or later in EarPair's window.
+
+Nothing else. No account, no analytics, no crash reports. EarPair's logs stay on this PC (%LOCALAPPDATA%\EarPair\logs).
+
+Privacy policy: https://github.com/milkman-wang/EarPair/blob/main/PRIVACY.md

@@ -156,6 +156,11 @@
           <ToggleSwitch x:Name="StartupSwitch" AutomationProperties.Name="{x:Bind local:Strings.StartAtLogin}"
                         Toggled="OnStartupToggled" />
         </controls:SettingsRow>
+
+        <controls:SettingsRow Glyph="&#xE895;" Header="{x:Bind local:Strings.AutoCheckUpdates}">
+          <ToggleSwitch x:Name="AutoUpdateSwitch" AutomationProperties.Name="{x:Bind local:Strings.AutoCheckUpdates}"
+                        Toggled="OnAutoUpdateToggled" />
+        </controls:SettingsRow>
       </StackPanel>
     </ScrollViewer>
   </Grid>

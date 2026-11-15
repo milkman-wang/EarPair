@@ -11,8 +11,6 @@
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <RootNamespace>EarPair.App</RootNamespace>
     <AssemblyName>EarPair</AssemblyName>
-    <Product>EarPair</Product>
-    <Version>0.2.3</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\EarPair.ico</ApplicationIcon>
     <Platforms>x64;ARM64</Platforms>

@@ -38,6 +38,8 @@ DefaultDirName={autopf}\EarPair
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 DisableReadyPage=yes
+; The update checkbox starts from the current setting, not from the previous install
+UsePreviousTasks=no
 ArchitecturesAllowed={#Architectures}
 ArchitecturesInstallIn64BitMode={#Architectures}
 MinVersion=10.0.19041
@@ -57,13 +59,33 @@ OutputDir={#OutputDir}
 OutputBaseFilename=EarPair-{#AppVersion}-{#Arch}-setup
 
 [Languages]
-Name: "en"; MessagesFile: "compiler:Default.isl"
+Name: "en"; MessagesFile: "compiler:Default.isl"; InfoBeforeFile: "privacy-en.txt"
 ; Inno Setup ships no Simplified Chinese: ours only overrides the messages EarPair's setup shows
-Name: "zhHans"; MessagesFile: "compiler:Default.isl,ChineseSimplified.isl"
+Name: "zhHans"; MessagesFile: "compiler:Default.isl,ChineseSimplified.isl"; InfoBeforeFile: "privacy-zh-Hans.txt"
 
 [Messages]
 ; The Install button says it already
 ReadyLabel2b=
+; Two short pages before installing: how EarPair uses the network, and whether it may check for updates
+en.WizardInfoBefore=Privacy
+en.InfoBeforeLabel=How EarPair uses the network:
+en.InfoBeforeClickLabel=
+en.WizardSelectTasks=Updates
+en.SelectTasksDesc=
+en.SelectTasksLabel2=You can change this later in EarPair's window.
+zhHans.WizardInfoBefore=隐私
+zhHans.InfoBeforeLabel=EarPair 如何使用网络：
+zhHans.InfoBeforeClickLabel=
+zhHans.WizardSelectTasks=更新
+zhHans.SelectTasksDesc=
+zhHans.SelectTasksLabel2=以后可以在 EarPair 的窗口里修改。
+
+[CustomMessages]
+en.AutoCheckUpdates=Check for updates automatically
+zhHans.AutoCheckUpdates=自动检查更新
+
+[Tasks]
+Name: "autoupdate"; Description: "{cm:AutoCheckUpdates}"
 
 [InstallDelete]
 ; Upgrades start from an empty folder, so files a newer version no longer ships don't linger
@@ -79,6 +101,13 @@ Name: "{autoprograms}\EarPair"; Filename: "{app}\EarPair.exe"
 ; Start at login lives in the Run key (written by the app); remove it with the app
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "EarPair"; ValueType: none; Flags: uninsdeletevalue dontcreatekey
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"; ValueName: "EarPair"; ValueType: none; Flags: uninsdeletevalue dontcreatekey
+; Automatic update checks (read and changed by the app). Only an install you click through sets it:
+; EarPair's own silent updates keep whatever was chosen in the app. The first line runs on every install,
+; silent ones included, so the uninstaller always removes the key (each install starts from an empty
+; folder, which drops the previous uninstall log)
+Root: HKCU; Subkey: "Software\EarPair"; ValueType: none; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\EarPair"; ValueType: dword; ValueName: "AutoCheckUpdates"; ValueData: 1; Tasks: autoupdate; Check: not WizardSilent; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\EarPair"; ValueType: dword; ValueName: "AutoCheckUpdates"; ValueData: 0; Tasks: not autoupdate; Check: not WizardSilent; Flags: uninsdeletekey
 
 [UninstallDelete]
 ; Logs and downloaded updates are EarPair's own leftovers; settings.json stays in case EarPair is installed again
@@ -143,6 +172,16 @@ end;
 function RelaunchAfterSilentInstall(): Boolean;
 begin
   Result := WizardSilent() and (EarPairWasRunning or (ExpandConstant('{param:relaunch|0}') = '1'));
+end;
+
+// The update checkbox shows the current setting (on when EarPair has never been set up)
+procedure CurPageChanged(CurPageID: Integer);
+var
+  Value: Cardinal;
+begin
+  if (CurPageID = wpSelectTasks) and
+     RegQueryDWordValue(HKEY_CURRENT_USER, 'Software\EarPair', 'AutoCheckUpdates', Value) then
+    WizardForm.TasksList.Checked[0] := Value <> 0;
 end;
 
 function InitializeUninstall(): Boolean;

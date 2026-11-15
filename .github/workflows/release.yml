@@ -58,7 +58,7 @@ jobs:
           $version = $env:TAG.TrimStart('v')
           $expected = foreach ($rid in 'win-x64', 'win-arm64') { "EarPair-$version-$rid-setup.exe" }
           $missing = $expected | Where-Object { -not (Test-Path (Join-Path dist $_)) }
-          if ($missing) { throw "Missing in dist: $($missing -join ', '). Does the tag match the app version in the .csproj files?" }
+          if ($missing) { throw "Missing in dist: $($missing -join ', '). Does the tag match the version in windows/Directory.Build.props?" }
           Get-ChildItem dist | Format-Table Name, Length
 
       - uses: actions/upload-artifact@v4
@@ -147,12 +147,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          notes=".github/release-notes/$TAG.md"
+          # Every release page links the code signing policy and the privacy policy (SignPath Foundation's terms)
+          footer="---"$'\n'"[Code signing policy](https://github.com/milkman-wang/EarPair#code-signing-policy) · [Privacy policy](https://github.com/milkman-wang/EarPair/blob/main/PRIVACY.md)"
+          notes="$RUNNER_TEMP/notes.md"
+          if [ -f ".github/release-notes/$TAG.md" ]; then
+            { cat ".github/release-notes/$TAG.md"; printf '\n%s\n' "$footer"; } > "$notes"
+          else
+            printf '%s\n' "$footer" > "$notes"
+          fi
           if gh release view "$TAG" > /dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
-            if [ -f "$notes" ]; then gh release edit "$TAG" --notes-file "$notes"; fi
-          elif [ -f "$notes" ]; then
+            gh release edit "$TAG" --notes-file "$notes"
+          elif [ -f ".github/release-notes/$TAG.md" ]; then
             gh release create "$TAG" dist/* --verify-tag --title "EarPair ${TAG#v}" --notes-file "$notes"
           else
-            gh release create "$TAG" dist/* --verify-tag --title "EarPair ${TAG#v}" --generate-notes
+            gh release create "$TAG" dist/* --verify-tag --title "EarPair ${TAG#v}" --generate-notes --notes-file "$notes"
           fi

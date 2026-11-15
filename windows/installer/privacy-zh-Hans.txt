@@ -1,0 +1,9 @@
+﻿EarPair 只和两类电脑通信。
+
+你的 Mac。EarPair 在局域网里查找 Mac（Bonjour），只把这台电脑的声音发给你选的那台 Mac。声音没有加密，请只在信任的网络里使用。
+
+GitHub，用来检查更新。EarPair 大约每 12 小时向 GitHub（api.github.com）查询一次有没有新版本；只有你选择更新时，才从 GitHub 下载安装程序。和访问任何网站一样，GitHub 能看到这台电脑的 IP 地址。下一页可以关掉自动检查，以后也可以在 EarPair 的窗口里修改。
+
+此外没有别的：不需要账号，没有统计，不上传崩溃报告。EarPair 的日志只保存在这台电脑上（%LOCALAPPDATA%\EarPair\logs）。
+
+隐私政策：https://github.com/milkman-wang/EarPair/blob/main/PRIVACY.md

@@ -36,7 +36,7 @@ EarPair 把 Windows 电脑的声音经局域网传到 Mac，与 Mac 自己的声
 | **单路播放**（Mac） | Mac 同一时间只播放一台电脑。其他电脑显示 **Mac 正忙** 和正在播放的电脑名。 | Mac 空闲后自动开始。 |
 | **连接通知**（Mac） | 电脑连上、停止或网络断开时通知；断线后自动重连。 | 需要允许通知。 |
 | **空间音频**（Mac） | 配合支持头部追踪的 AirPods，电脑的声音来自电脑屏幕方向，Mac 的声音来自 Mac 屏幕方向，转头时位置不变；没在看的那一边音量降低。 | 在 **空间音频** 页面对两块屏幕各设置一次。**Mac 自己的声音也跟着转** 需要 macOS 14.2 或以上。 |
-| **自动更新** | 两端都从 GitHub Releases 检查新版本（Mac 启动时及每 6 小时，Windows 启动后不久及每 12 小时），一键安装。 | 只获取最新版本号。Mac 版需放在可写入的文件夹中，例如“应用程序”。 |
+| **自动更新** | 两端都从 GitHub Releases 检查新版本（Mac 启动时及每 6 小时，Windows 启动后不久及每 12 小时），一键安装。 | 只获取最新版本号。可以关掉 **自动检查更新**（Windows：安装时或在窗口里；Mac：在 **连接** 页）。Mac 版需放在可写入的文件夹中，例如“应用程序”。 |
 | **后台运行** | Mac 上在菜单栏，Windows 上在通知区域；Windows 可 **开机时启动**。 | 发送期间电脑不会睡眠；Mac 连续 10 秒联系不上时暂停发送。 |
 
 <p align="center">
@@ -78,14 +78,15 @@ EarPair 把 Windows 电脑的声音经局域网传到 Mac，与 Mac 自己的声
 | 系统录音 | Mac 14.2+ | **Mac 自己的声音也跟着转** | 只有电脑的声音参与定位；**空间音频** 页点 **打开系统设置** |
 | “Apple 无法验证 EarPair” | Mac | 未签名 | **系统设置 → 隐私与安全性 → 仍要打开** |
 | “Windows 已保护你的电脑” | 电脑 | 安装程序未签名 | **更多信息 → 仍要运行** |
+| 智能应用控制“已阻止可能不安全的应用” | 电脑 | 程序未签名 | Windows 不能单独放行。在签名版本发布之前（见 [代码签名政策](#代码签名政策)），只能关掉智能应用控制才能运行 EarPair。 |
 
 > [!IMPORTANT]
-> 目前没有代码签名。macOS 会把每个新版本当成新 App，每次更新后都要重新允许本地网络权限。
+> 目前没有代码签名，Windows 版的签名正在申请中（见 [代码签名政策](#代码签名政策)）。macOS 会把每个新版本当成新 App，每次更新后都要重新允许本地网络权限。
 
 ## 安全与隐私
 
 - 声音未加密传输，Mac 接受同一网络内任何设备发来的声音。请只在信任的网络中使用。
-- 唯一的外网请求是向 GitHub Releases API 检查更新。
+- 唯一的外网请求是向 GitHub Releases API 检查更新，可以关掉。详见 [隐私政策](PRIVACY.md#隐私政策)。
 
 ## 常见问题
 
@@ -146,3 +147,20 @@ Windows 端采集电脑的声音，以不压缩的 16 位立体声 PCM、每包 
 - 选择要发送的电脑 App
 - 配对与加密
 - 代码签名与公证
+
+## 代码签名政策
+
+Code signing policy: Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+只有 Windows 版和它的安装程序会签名，而且只签由本仓库的 [发布流程](.github/workflows/release.yml) 构建出来的文件。
+
+| 角色 | 成员 |
+|---|---|
+| 提交者和审核者 | [milkman-wang](https://github.com/milkman-wang) |
+| 批准者 | [milkman-wang](https://github.com/milkman-wang) |
+
+隐私：EarPair 只把声音发给你在局域网里选的那台 Mac，除了向 GitHub 检查更新（可以关掉）以外不联系任何其他系统。详见 [隐私政策](PRIVACY.md#隐私政策)。
+
+## 许可证
+
+[MIT](LICENSE)

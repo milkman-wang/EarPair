@@ -36,7 +36,7 @@ EarPair streams a Windows PC's audio to a Mac over the local network. The Mac mi
 | **One PC at a time** (Mac) | The Mac plays one PC. Other PCs show **Mac is busy** and the name of the one playing. | They start automatically once the Mac is free. |
 | **Connection notices** (Mac) | Notifies when a PC connects, stops or drops off the network, and reconnects by itself after a dropout. | Requires notification permission. |
 | **Spatial audio** (Mac) | With head-tracking AirPods, the PC's sound comes from the PC's screen and the Mac's from the Mac's, fixed in place as you turn your head. The screen you look away from gets quieter. | Set up once on the **Spatial Audio** page by facing each screen. **Move this Mac's sound too** needs macOS 14.2 or later. |
-| **Updates** | Both apps check GitHub Releases (Mac at launch and every 6 h, Windows shortly after start and every 12 h) and install with one click. | Only the latest version number is requested. The Mac app must be in a folder it can write to, such as Applications. |
+| **Updates** | Both apps check GitHub Releases (Mac at launch and every 6 h, Windows shortly after start and every 12 h) and install with one click. | Only the latest version number is requested. Turn automatic checks off with **Check for updates automatically** (Windows: in setup or the window; Mac: on the **Connection** page). The Mac app must be in a folder it can write to, such as Applications. |
 | **Background operation** | Lives in the Mac menu bar and the Windows notification area. **Start at login** on Windows. | The PC doesn't sleep while sending; sending pauses after the Mac has been unreachable for 10 s. |
 
 <p align="center">
@@ -78,14 +78,15 @@ Both apps follow the system language: English or Simplified Chinese.
 | System Audio Recording | Mac 14.2+ | **Move this Mac's sound too** | Only the PC's sound is placed; **Open System Settings** on the **Spatial Audio** page |
 | "Apple could not verify EarPair" | Mac | Unsigned build | **System Settings → Privacy & Security → Open Anyway** |
 | "Windows protected your PC" | PC | Unsigned installer | **More info → Run anyway** |
+| Smart App Control "blocked a potentially unsafe app" | PC | Unsigned app | Windows has no per-app exception. Until signed builds are out (see [Code signing policy](#code-signing-policy)), EarPair runs only with Smart App Control off. |
 
 > [!IMPORTANT]
-> Builds aren't code-signed yet. macOS treats every new version as a new app and asks for Local Network access again after each update.
+> Builds aren't code-signed yet; signing of the Windows builds is being set up (see [Code signing policy](#code-signing-policy)). macOS treats every new version as a new app and asks for Local Network access again after each update.
 
 ## Security and privacy
 
 - Audio is sent unencrypted, and the Mac accepts audio from any device on the network. Use EarPair only on networks you trust.
-- The only internet traffic is the update check against the GitHub Releases API.
+- The only internet traffic is the update check against the GitHub Releases API, which you can turn off. Details: [Privacy policy](PRIVACY.md).
 
 ## Troubleshooting
 
@@ -146,3 +147,20 @@ Output goes to `macos/build/` and `dist\`. Tests, tools and the project layout: 
 - Choose which PC apps to send
 - Pairing and encryption
 - Signed and notarized builds
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+Only the Windows app and its installer are signed, and only when built from this repository by the [release workflow](.github/workflows/release.yml).
+
+| Role | Members |
+|---|---|
+| Committers and reviewers | [milkman-wang](https://github.com/milkman-wang) |
+| Approvers | [milkman-wang](https://github.com/milkman-wang) |
+
+Privacy: EarPair sends audio only to the Mac you choose on your local network, and contacts no other system except GitHub for update checks, which you can turn off. See the [Privacy policy](PRIVACY.md).
+
+## License
+
+[MIT](LICENSE)

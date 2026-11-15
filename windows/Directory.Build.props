@@ -1,0 +1,12 @@
+<Project>
+  <!-- 所有 Windows 程序共用的产品信息：exe 和 dll 的“产品名称”“产品版本”都来自这里。
+       代码签名（SignPath）要求每个签名的文件都标着同一个产品名和版本号。发新版本时只改这里的 Version。 -->
+  <PropertyGroup>
+    <Product>EarPair</Product>
+    <Version>0.2.3</Version>
+    <Company>EarPair</Company>
+    <Copyright>Copyright (c) 2026 milkman-wang</Copyright>
+    <!-- 产品版本就是 Version，不在后面加提交哈希 -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>

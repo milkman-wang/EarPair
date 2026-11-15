@@ -6,7 +6,8 @@ import SwiftUI
 
 private let updateLog = Logger(subsystem: "app.earpair", category: "update")
 
-/// 自动更新：打开后过一会儿查一次 GitHub，之后每 6 小时查一次；有新版本时菜单栏面板上出现“更新到 x.y.z”，
+/// 自动更新：打开后过一会儿查一次 GitHub，之后每 6 小时查一次（“自动检查更新”关掉后不查，手动检查照常）；
+/// 有新版本时菜单栏面板上出现“更新到 x.y.z”，
 /// 点了就下载、校验、换掉正在运行的 EarPair 并重新打开。设置环境变量 EARPAIR_UPDATE_FEED 可以换成别的地址（测试用）。
 @MainActor
 public final class UpdateController: ObservableObject {
@@ -23,6 +24,12 @@ public final class UpdateController: ObservableObject {
     @Published public private(set) var state = State.idle
     public let currentVersion: String
 
+    /// 自动检查更新（默认打开）。关掉后不再自动访问 GitHub
+    @Published public var autoCheck: Bool {
+        didSet { if isLive { UserDefaults.standard.set(autoCheck, forKey: Self.autoCheckKey) } }
+    }
+    nonisolated static let autoCheckKey = "autoCheckUpdates"
+
     nonisolated static let firstCheckDelay = 15.0
     nonisolated static let interval = 6.0 * 3600
 
@@ -34,10 +41,11 @@ public final class UpdateController: ObservableObject {
         self.currentVersion = currentVersion
         feed = ProcessInfo.processInfo.environment["EARPAIR_UPDATE_FEED"].flatMap(URL.init(string:)) ?? Updater.feed
         isLive = true
+        autoCheck = UserDefaults.standard.object(forKey: Self.autoCheckKey) as? Bool ?? true
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(Self.firstCheckDelay))
             while !Task.isCancelled {
-                await self?.check(userInitiated: false)
+                if self?.autoCheck == true { await self?.check(userInitiated: false) }
                 try? await Task.sleep(for: .seconds(Self.interval))
             }
         }
@@ -49,6 +57,7 @@ public final class UpdateController: ObservableObject {
         self.state = state
         feed = Updater.feed
         isLive = false
+        autoCheck = true
     }
 
     /// 有新版本时那一行要显示的版本
