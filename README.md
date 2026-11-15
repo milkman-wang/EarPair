@@ -65,7 +65,7 @@ Both apps follow the system language: English or Simplified Chinese.
 ## Installation
 
 1. **Mac:** download `EarPair-<version>-macos-universal.dmg` from [Releases](https://github.com/milkman-wang/EarPair/releases/latest), drag **EarPair** to **Applications** and open it from there. Allow **Local Network** access when asked.
-2. **PC:** download `EarPair-<version>-win-x64-setup.exe` (`win-arm64` for Arm PCs) and run it. It installs for the current user, without administrator rights.
+2. **PC:** download `EarPair-<version>-win-x64-setup.exe` (`win-arm64` for Arm PCs) and run it. It installs for the current user, without administrator rights; choose **Install for all users** to put it in Program Files instead.
 3. On the PC, click your Mac in the list.
 
 ### Permissions and first-run prompts

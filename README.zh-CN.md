@@ -65,7 +65,7 @@ EarPair 把 Windows 电脑的声音经局域网传到 Mac，与 Mac 自己的声
 ## 安装
 
 1. **Mac**：从 [Releases](https://github.com/milkman-wang/EarPair/releases/latest) 下载 `EarPair-<版本>-macos-universal.dmg`，把 **EarPair** 拖进 **应用程序** 后从那里打开。询问本地网络权限时点 **允许**。
-2. **电脑**：下载 `EarPair-<版本>-win-x64-setup.exe`（Arm 电脑用 `win-arm64`）并运行。安装到当前用户，无需管理员权限。
+2. **电脑**：下载 `EarPair-<版本>-win-x64-setup.exe`（Arm 电脑用 `win-arm64`）并运行。默认只为当前用户安装，无需管理员权限；选“为所有用户安装”则装到 Program Files。
 3. 在电脑上点一下你的 Mac。
 
 ### 权限与首次运行提示

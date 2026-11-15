@@ -1,6 +1,6 @@
 ﻿; Simplified Chinese for the EarPair installer. Loaded on top of Default.isl
 ; (MessagesFile: "compiler:Default.isl,ChineseSimplified.isl"), so it only lists the messages
-; that can show up with EarPair's one-page setup and its uninstaller; anything else stays English.
+; that can show up with EarPair's setup and its uninstaller; anything else stays English.
 ; Wording follows docs/localization.md.
 
 [LangOptions]
@@ -29,6 +29,39 @@ ButtonYesToAll=全部选是(&A)
 ButtonNo=否(&N)
 ButtonNoToAll=全部选否(&O)
 ButtonFinish=完成(&F)
+PrivilegesRequiredOverrideTitle=选择安装方式
+PrivilegesRequiredOverrideInstruction=为谁安装
+PrivilegesRequiredOverrideText1=%1 可以为所有用户安装（需要管理员权限），也可以只为你安装。
+PrivilegesRequiredOverrideText2=%1 可以只为你安装，也可以为所有用户安装（需要管理员权限）。
+PrivilegesRequiredOverrideAllUsers=为所有用户安装(&A)
+PrivilegesRequiredOverrideAllUsersRecommended=为所有用户安装（推荐）(&A)
+PrivilegesRequiredOverrideCurrentUser=只为我安装(&M)
+PrivilegesRequiredOverrideCurrentUserRecommended=只为我安装（推荐）(&M)
+WizardSelectDir=安装位置
+SelectDirDesc=要把 [name] 装在哪里？
+SelectDirLabel3=[name] 会装到下面这个文件夹。
+SelectDirBrowseLabel=点“下一步”继续。要换一个文件夹，点“浏览”。
+DiskSpaceGBLabel=至少需要 [gb] GB 可用空间。
+DiskSpaceMBLabel=至少需要 [mb] MB 可用空间。
+CannotInstallToNetworkDrive=不能安装到网络驱动器。
+CannotInstallToUNCPath=不能安装到网络路径（UNC 路径）。
+InvalidPath=请输入带盘符的完整路径，例如：%n%nC:\APP%n%n或者这样的网络路径：%n%n\\server\share
+InvalidDrive=选择的驱动器或网络共享不存在或无法访问，请换一个。
+DiskSpaceWarningTitle=磁盘空间不足
+DiskSpaceWarning=安装至少需要 %1 KB 可用空间，但所选驱动器只有 %2 KB。%n%n仍然继续吗？
+DirNameTooLong=文件夹名称或路径太长。
+InvalidDirName=文件夹名称无效。
+BadDirName32=文件夹名称不能包含以下字符：%n%n%1
+DirExistsTitle=文件夹已存在
+DirExists=文件夹：%n%n%1%n%n已经存在。仍然装到这个文件夹吗？
+DirDoesntExistTitle=文件夹不存在
+DirDoesntExist=文件夹：%n%n%1%n%n不存在。要新建这个文件夹吗？
+ButtonBrowse=浏览(&B)…
+ButtonWizardBrowse=浏览(&R)…
+ButtonNewFolder=新建文件夹(&M)
+BrowseDialogTitle=选择文件夹
+BrowseDialogLabel=在下面的列表里选一个文件夹，然后点“确定”。
+NewFolderName=新建文件夹
 WizardReady=准备安装
 ReadyLabel1=即将在这台电脑上安装 [name]。
 ReadyLabel2a=点“安装”继续，或点“上一步”查看、修改设置。

@@ -33,9 +33,18 @@ AppVersion={#AppVersion}
 AppVerName=EarPair {#AppVersion}
 AppPublisherURL=https://github.com/milkman-wang/EarPair
 VersionInfoVersion={#AppVersion}
+; Installs for the current user without administrator rights by default; the first page offers
+; "Install for all users" (Program Files, asks for administrator rights). Upgrades, EarPair's own silent
+; updates included, keep the mode and folder of the previous install.
 PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog commandline
+; The app's own settings (update checks, start at login) are per user even in an all-users install
+UsedUserAreasWarning=no
 DefaultDirName={autopf}\EarPair
-DisableDirPage=yes
+; The folder page shows on the first install only. NextButtonClick checks the folder instead of
+; Inno's "folder already exists" prompt
+DisableDirPage=auto
+DirExistsWarning=no
 DisableProgramGroupPage=yes
 DisableReadyPage=yes
 ; The update checkbox starts from the current setting, not from the previous install
@@ -83,13 +92,20 @@ zhHans.SelectTasksLabel2=以后可以在 EarPair 的窗口里修改。
 [CustomMessages]
 en.AutoCheckUpdates=Check for updates automatically
 zhHans.AutoCheckUpdates=自动检查更新
+en.FolderInUse=This folder already has other files in it. Choose an empty folder, or a new one.
+zhHans.FolderInUse=这个文件夹里已经有别的文件。请选一个空文件夹，或者新建一个。
+en.FolderNeedsAdmin=Setup can't write to this folder. Choose another one, or run setup again and choose "Install for all users".
+zhHans.FolderNeedsAdmin=安装程序没有权限写入这个文件夹。请换一个，或者重新运行安装程序并选择“为所有用户安装”。
+en.FolderNotWritable=Setup can't write to this folder. Choose another one.
+zhHans.FolderNotWritable=安装程序无法写入这个文件夹。请换一个。
 
 [Tasks]
 Name: "autoupdate"; Description: "{cm:AutoCheckUpdates}"
 
 [InstallDelete]
-; Upgrades start from an empty folder, so files a newer version no longer ships don't linger
-Type: filesandordirs; Name: "{app}\*"
+; Upgrades start from an empty folder, so files a newer version no longer ships don't linger. Only in a
+; folder that holds EarPair: the folder can be chosen, and must never be someone else's
+Type: filesandordirs; Name: "{app}\*"; Check: IsEarPairFolder
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -113,6 +129,9 @@ Root: HKCU; Subkey: "Software\EarPair"; ValueType: dword; ValueName: "AutoCheckU
 ; Logs and downloaded updates are EarPair's own leftovers; settings.json stays in case EarPair is installed again
 Type: filesandordirs; Name: "{localappdata}\EarPair\logs"
 Type: filesandordirs; Name: "{localappdata}\EarPair\updates"
+; An upgrade empties the folder first, so the new uninstall log doesn't know setup created it: remove it
+; here when nothing else is left in it
+Type: dirifempty; Name: "{app}"
 
 [Run]
 Filename: "{app}\EarPair.exe"; Description: "{cm:LaunchProgram,EarPair}"; Flags: nowait postinstall skipifsilent
@@ -182,6 +201,78 @@ begin
   if (CurPageID = wpSelectTasks) and
      RegQueryDWordValue(HKEY_CURRENT_USER, 'Software\EarPair', 'AutoCheckUpdates', Value) then
     WizardForm.TasksList.Checked[0] := Value <> 0;
+end;
+
+function IsEarPairFolder(): Boolean;
+begin
+  Result := FileExists(ExpandConstant('{app}\EarPair.exe'));
+end;
+
+// The chosen folder exists and holds files that aren't EarPair's (upgrades empty the folder first)
+function HasOtherFiles(Dir: String): Boolean;
+var
+  FindRec: TFindRec;
+begin
+  Result := False;
+  if not DirExists(Dir) or FileExists(AddBackslash(Dir) + 'EarPair.exe') then
+    Exit;
+  if FindFirst(AddBackslash(Dir) + '*', FindRec) then
+  begin
+    try
+      repeat
+        if (FindRec.Name <> '.') and (FindRec.Name <> '..') then
+          Result := True;
+      until Result or not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+end;
+
+// Setup can create the folder and write in it. Tries it for real (a folder in C:\ can be made without
+// administrator rights, a file there can't), then removes whatever it made
+function CanWriteTo(Dir: String): Boolean;
+var
+  Existing, Parent, Probe: String;
+begin
+  Result := False;
+  Existing := RemoveBackslashUnlessRoot(Dir);
+  while not DirExists(Existing) do
+  begin
+    Parent := ExtractFileDir(Existing);
+    if Parent = Existing then
+      Exit;
+    Existing := Parent;
+  end;
+  if ForceDirectories(Dir) then
+  begin
+    Probe := AddBackslash(Dir) + 'EarPair-setup-test.tmp';
+    Result := SaveStringToFile(Probe, '', False);
+    DeleteFile(Probe);
+  end;
+  Dir := RemoveBackslashUnlessRoot(Dir);
+  while (Length(Dir) > Length(Existing)) and RemoveDir(Dir) do
+    Dir := ExtractFileDir(Dir);
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if CurPageID <> wpSelectDir then
+    Exit;
+  if HasOtherFiles(WizardDirValue) then
+  begin
+    MsgBox(CustomMessage('FolderInUse'), mbError, MB_OK);
+    Result := False;
+  end
+  else if not CanWriteTo(WizardDirValue) then
+  begin
+    if IsAdminInstallMode then
+      MsgBox(CustomMessage('FolderNotWritable'), mbError, MB_OK)
+    else
+      MsgBox(CustomMessage('FolderNeedsAdmin'), mbError, MB_OK);
+    Result := False;
+  end;
 end;
 
 function InitializeUninstall(): Boolean;

@@ -1,6 +1,6 @@
 ﻿# 在 Windows 上打包 EarPair（需要 .NET 10 SDK，不需要 Visual Studio）。
 # 产物自带 .NET 运行时和 Windows App SDK，别的电脑不用另装：
-#   dist\EarPair-<版本>-win-x64-setup.exe    安装程序（装了 Inno Setup 6 时；只装给当前用户，不需要管理员）
+#   dist\EarPair-<版本>-win-x64-setup.exe    安装程序（装了 Inno Setup 6 时；默认只装给当前用户，不需要管理员）
 #   dist\EarPair-<版本>-win-x64.zip          没有 Inno Setup 时打 zip（解压后运行 EarPair\EarPair.exe）
 # 用法：powershell -ExecutionPolicy Bypass -File windows\build.ps1 [-Runtimes win-x64,win-arm64] [-Out 目录]
 param(
