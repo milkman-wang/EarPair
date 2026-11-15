@@ -193,7 +193,7 @@ public final class ReceiverController: ObservableObject {
     nonisolated static let statsPublishInterval = 0.3
 
     public static let appVersion =
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.3"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.4"
 
     private let core: ReceiverCore
     private let output: AudioOutput

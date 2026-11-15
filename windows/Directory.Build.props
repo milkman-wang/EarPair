@@ -3,7 +3,7 @@
        代码签名（SignPath）要求每个签名的文件都标着同一个产品名和版本号。发新版本时只改这里的 Version。 -->
   <PropertyGroup>
     <Product>EarPair</Product>
-    <Version>0.2.3</Version>
+    <Version>0.2.4</Version>
     <Company>EarPair</Company>
     <Copyright>Copyright (c) 2026 milkman-wang</Copyright>
     <!-- 产品版本就是 Version，不在后面加提交哈希 -->

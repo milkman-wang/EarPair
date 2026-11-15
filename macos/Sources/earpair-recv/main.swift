@@ -140,7 +140,7 @@ let receiverID = UUID().uuidString.replacingOccurrences(of: "-", with: "").lower
 let responder = ControlResponder(
     core: core,
     info: ControlResponder.LocalInfo(id: receiverID, name: HostInfo.computerName, kind: HostInfo.kind.rawValue,
-                                     app: "0.2.3",
+                                     app: "0.2.4",
                                      output: options.nullOutput ? nil : OutputDevice.current()?.name,
                                      transport: options.nullOutput ? nil : OutputDevice.current()?.protocolTransport)
 ) { data, endpoint in
