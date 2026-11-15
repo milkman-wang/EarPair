@@ -390,6 +390,14 @@ public final class ReceiverCore: @unchecked Sendable {
         }
     }
 
+    /// 正在进行的流（没有、或者已经结束是 nil）
+    public func currentStream() -> (id: UInt32, sender: String)? {
+        lock.withLock {
+            guard let s = stream, state != .idle else { return nil }
+            return (s.id, s.senderAddress)
+        }
+    }
+
     /// 发送端说它停了（控制包 BYE）：是当前流就立即进入 idle，不等超时。
     /// 之后同一个流迟到的包都忽略，不会再“连上”一次；同一个发送端换了新流照常开始。
     /// 已经按超时结束了（BYE 比超时晚到）也要记下原因：是手动停止就不再当成网络断开去重连。

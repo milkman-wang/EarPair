@@ -2,8 +2,17 @@ using Windows.Devices.Enumeration;
 
 namespace EarPair.App.Services;
 
-/// <summary>局域网里一台在接收 EarPair 的 Mac（Mac 端用 Bonjour 广播 _earpair._udp）。MacId、Kind 来自 TXT 记录。</summary>
-public sealed record DiscoveredMac(string Id, string Name, string Address, int Port, string? MacId, string? Kind = null);
+/// <summary>
+/// 局域网里一台在接收 EarPair 的 Mac（Mac 端用 Bonjour 广播 _earpair._udp）。MacId、Kind 来自 TXT 记录。
+/// Address 是挑出来的那个地址；Addresses 是它最近报告过的所有地址，最近报告的在前（Address 联系不上时挨个试）。
+/// </summary>
+public sealed record DiscoveredMac(string Id, string Name, string Address, int Port, string? MacId, string? Kind = null,
+                                   IReadOnlyList<string>? Addresses = null)
+{
+    public bool SameAs(DiscoveredMac? other) =>
+        other is not null && this with { Addresses = null } == other with { Addresses = null } &&
+        (Addresses ?? []).SequenceEqual(other.Addresses ?? []);
+}
 
 /// <summary>
 /// 用 Windows 自带的 DNS-SD（mDNS）浏览局域网里的 Mac，不需要第三方库，也不会弹防火墙提示。
@@ -30,6 +39,11 @@ public sealed class MacDiscovery : IDisposable
     /// </summary>
     private readonly Dictionary<string, Dictionary<string, long>> _addresses = new();
     private const long StaleAfter = 60_000;
+    /// <summary>
+    /// 比最近一次报告早这么多（毫秒）以内的地址算“现在的”，优先从里面挑：Mac 换了地址以后，Windows 可能还会在一阵子里
+    /// 同时报新旧两个地址，但旧地址不会再被单独报告
+    /// </summary>
+    private const long FreshWithin = 5_000;
     private DeviceWatcher? _watcher;
 
     public event Action? Changed;
@@ -43,6 +57,15 @@ public sealed class MacDiscovery : IDisposable
         {
             lock (_lock) return _macs.Values.OrderBy(m => m.Name, StringComparer.CurrentCulture).ToList();
         }
+    }
+
+    /// <summary>重新问一遍（目标 Mac 联系不上时）：列表不清空，重新报告的地址会更新进来</summary>
+    public void Refresh()
+    {
+        bool completed = EnumerationCompleted;
+        Dispose();
+        Start();
+        EnumerationCompleted |= completed;
     }
 
     /// <summary>重新扫描：清空列表，重启浏览</summary>
@@ -93,15 +116,20 @@ public sealed class MacDiscovery : IDisposable
                 foreach (string stale in seen.Where(kv => now - kv.Value > StaleAfter).Select(kv => kv.Key).ToList())
                     seen.Remove(stale);
             }
-            string? address = AddressPicker.Pick(seen.Keys, old?.Address, AddressPicker.Current());
+            IReadOnlyList<LocalNetwork> local = AddressPicker.Current();
+            long newest = seen.Count > 0 ? seen.Values.Max() : 0;
+            string? address = AddressPicker.Pick(seen.Where(kv => newest - kv.Value <= FreshWithin).Select(kv => kv.Key),
+                                                 old?.Address, local)
+                              ?? AddressPicker.Pick(seen.Keys, old?.Address, local);
+            string[] addresses = seen.OrderByDescending(kv => kv.Value).Select(kv => kv.Key).ToArray();
             if (name is null || address is null || port == 0) return; // 信息还不全，等 Updated
             string[]? text = properties.TryGetValue(Properties[4], out object? t) ? t as string[] : null;
             string? Txt(string key) =>
                 text?.Select(entry => entry.Split('=', 2)).FirstOrDefault(kv => kv.Length == 2 && kv[0] == key)?[1];
             string? macId = Txt("id") ?? old?.MacId;
             string? kind = Txt("kind") is "laptop" or "desktop" ? Txt("kind") : old?.Kind;
-            var mac = new DiscoveredMac(id, name, address, port, macId, kind);
-            if (mac == old) return;
+            var mac = new DiscoveredMac(id, name, address, port, macId, kind, addresses);
+            if (mac.SameAs(old)) return;
             _macs[id] = mac;
         }
         Changed?.Invoke();

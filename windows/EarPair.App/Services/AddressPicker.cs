@@ -32,21 +32,21 @@ public static class AddressPicker
             .ToList();
         if (candidates.Count == 0) return null;
 
-        // 0 真实网卡、有网关；1 真实网卡、没网关；2 虚拟网卡、有网关；3 虚拟网卡、没网关；4 不在本机任何网段
-        int Rank(IPAddress ip)
-        {
-            int best = 4;
-            foreach (LocalNetwork n in local)
-            {
-                if (SameSubnet(ip, n.Address, n.Mask))
-                    best = Math.Min(best, (n.Virtual ? 2 : 0) + (n.HasGateway ? 0 : 1));
-            }
-            return best;
-        }
-
-        int top = candidates.Min(Rank);
-        List<IPAddress> best = candidates.Where(ip => Rank(ip) == top).ToList();
+        int top = candidates.Min(ip => Rank(ip, local));
+        List<IPAddress> best = candidates.Where(ip => Rank(ip, local) == top).ToList();
         return (best.FirstOrDefault(ip => ip.ToString() == previous) ?? best[0]).ToString();
+    }
+
+    /// <summary>0 真实网卡、有网关；1 真实网卡、没网关；2 虚拟网卡、有网关；3 虚拟网卡、没网关；4 不在本机任何网段</summary>
+    public static int Rank(IPAddress ip, IReadOnlyList<LocalNetwork> local)
+    {
+        int best = 4;
+        foreach (LocalNetwork n in local)
+        {
+            if (SameSubnet(ip, n.Address, n.Mask))
+                best = Math.Min(best, (n.Virtual ? 2 : 0) + (n.HasGateway ? 0 : 1));
+        }
+        return best;
     }
 
     /// <summary>本机现在启用的网卡上的 IPv4 网段</summary>

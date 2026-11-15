@@ -228,6 +228,30 @@ struct ControlPacketTests {
         #expect(responder.senderKind(for: "10.0.0.6") == nil)
     }
 
+    @Test("同一台电脑换了 IP：新地址的 HELLO 一到就结束旧地址上的流，新地址马上接上，不报“忙”")
+    func senderChangedAddress() throws {
+        let core = makeCore()
+        let outbox = Outbox()
+        let responder = makeResponder(core, outbox)
+        let factory = PacketFactory()
+        let old = UDPEndpoint(address: "192.168.1.20", port: 50_000)
+        let new = UDPEndpoint(address: "192.168.1.35", port: 50_001)
+        send(responder, .hello, HelloMessage(sender: "pc-1", name: "PC", stream: factory.streamID), from: old, at: 0)
+        core.ingest(factory.packet(0), from: old.address, at: 0)
+        #expect(core.currentStream()?.sender == old.address)
+
+        // 另一台电脑从别的地址来：照旧是“忙”
+        send(responder, .hello, HelloMessage(sender: "pc-2", name: "OTHER", stream: 0), from: UDPEndpoint(address: "192.168.1.50", port: 1), at: 0.1)
+        #expect(outbox.statuses.last?.message.state == "busy")
+        #expect(core.currentStream()?.sender == old.address)
+
+        send(responder, .hello, HelloMessage(sender: "pc-1", name: "PC", stream: 0), from: new, at: 0.2)
+        #expect(outbox.statuses.last?.message.state == "idle")
+        #expect(core.currentStream() == nil)
+        core.ingest(factory.packet(1), from: new.address, at: 0.3)
+        #expect(core.currentStream()?.sender == new.address)
+    }
+
     @Test("BYE 的 reason：network、device 分开记；不认识的当作手动停止")
     func byeReasons() {
         for (reason, expected) in [("network", EndReason.network), ("device", .device), ("user", .stopped),

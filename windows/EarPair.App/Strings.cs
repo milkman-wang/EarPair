@@ -107,6 +107,8 @@ public static class Strings
         Format(nameof(LogStartSendingAnyway), mac, host, port);
     public static string LogStopSending => Get(nameof(LogStopSending));
     public static string LogAddressChanged(string mac, string from, string to) => Format(nameof(LogAddressChanged), mac, from, to);
+    public static string LogTryAddress(string mac, string from, string to) => Format(nameof(LogTryAddress), mac, from, to);
+    public static string LogRediscover(string mac) => Format(nameof(LogRediscover), mac);
     public static string LogSessionEnding => Get(nameof(LogSessionEnding));
     public static string LogCloseRequested => Get(nameof(LogCloseRequested));
     public static string LogUpToDate(string current, string latest) => Format(nameof(LogUpToDate), current, latest);

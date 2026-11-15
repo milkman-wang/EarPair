@@ -64,6 +64,9 @@
   <data name="LogPausedBusy" xml:space="preserve">
     <value>Mac 正在放别的电脑的声音，暂停发送</value>
   </data>
+  <data name="LogLocalAddressGone" xml:space="preserve">
+    <value>本机已经没有地址 {0}，换用新的地址重新连接</value>
+  </data>
   <data name="LogMuteOff" xml:space="preserve">
     <value>发送时本机静音：关</value>
   </data>

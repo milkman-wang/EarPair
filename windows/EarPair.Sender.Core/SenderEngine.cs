@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
@@ -107,8 +108,11 @@ public sealed class SenderEngine : IDisposable
     private const int SoundThreshold = 3;
     /// <summary>进程 loopback 激活失败后隔多久再试（秒）；试完这几次还不行，就一直用设备 loopback，直到下次打开发送</summary>
     private static readonly double[] ProcessLoopbackRetryDelays = [30, 300];
-    /// <summary>用名字（比如 mac.local）指定的 Mac 联系不上这么久（秒），就重新解析一次地址</summary>
-    private const double ResolveAgainAfter = 30;
+    /// <summary>
+    /// Mac 联系不上这么久（秒），就重建套接字：用名字（比如 mac.local）指定的 Mac 重新解析一次地址；
+    /// 本机换了 IP 时，已连接的 UDP 套接字还绑在旧地址上，也要重建
+    /// </summary>
+    private const double ResolveAgainAfter = 10;
 
     private readonly BlockingCollection<Action> _work = new();
     private readonly Thread _thread;
@@ -214,6 +218,32 @@ public sealed class SenderEngine : IDisposable
         });
         // 只在开关打开时走（Start 里打开、StopNow 里关掉）
         _ticker = new Timer(_ => Post(OnTick), null, Timeout.Infinite, Timeout.Infinite);
+        NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
+    }
+
+    private void OnNetworkAddressChanged(object? sender, EventArgs e) => Post(() =>
+    {
+        // 本机的 IP 变了（换了 Wi-Fi、DHCP 换了地址）：套接字绑着的地址没了，发出去的包到不了 Mac。
+        // 别的网卡变化（虚拟网卡、VPN）不用管，不打断正在放的声音
+        if (_settings is not { } settings || _udp?.LocalAddress is not { } local || IsLocalAddress(local)) return;
+        Log?.Invoke(CoreStrings.LogLocalAddressGone(local.ToString()));
+        ReleaseSocket();
+        if (_state is SenderState.Sending or SenderState.WaitingForMac) Probe(settings);
+    });
+
+    private static bool IsLocalAddress(IPAddress address)
+    {
+        try
+        {
+            return NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == OperationalStatus.Up)
+                .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+                .Any(u => u.Address.Equals(address));
+        }
+        catch (NetworkInformationException)
+        {
+            return true;
+        }
     }
 
     /// <summary>当前状态；计数器部分实时读取。</summary>
@@ -625,8 +655,8 @@ public sealed class SenderEngine : IDisposable
             return;
         }
 
-        // 用名字指定的 Mac 一直联系不上：它可能换了地址，重新解析
-        if (_state == SenderState.WaitingForMac && _udp is not null && !IPAddress.TryParse(settings.Host, out _) &&
+        // Mac 一直联系不上：重建套接字（重新解析名字、换到本机现在的地址）
+        if (_state == SenderState.WaitingForMac && _udp is not null &&
             now - _socketCreatedAt > ResolveAgainAfter && now - _remoteAt > ResolveAgainAfter)
         {
             ReleaseSocket();
@@ -1002,6 +1032,7 @@ public sealed class SenderEngine : IDisposable
     public void Dispose()
     {
         _ticker.Dispose();
+        NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged;
         Post(() =>
         {
             TearDown();

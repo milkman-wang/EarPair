@@ -55,6 +55,8 @@ public final class ControlResponder: @unchecked Sendable {
     private var endpoints: [String: UDPEndpoint] = [:]
     private var reconnect: (endpoint: UDPEndpoint, until: Double)?
     private var kindsByAddress: [String: DeviceKind] = [:]
+    /// 每个地址上发送端在 HELLO 里报的 id：同一台电脑换了 IP 时认得出来
+    private var sendersByAddress: [String: String] = [:]
     private var lastStatusAt = -Double.infinity
 
     public init(core: ReceiverCore, info: LocalInfo, send: @escaping (Data, UDPEndpoint) -> Void) {
@@ -108,6 +110,13 @@ public final class ControlResponder: @unchecked Sendable {
                 endpoints[sender.address] = sender
                 if let name = hello.name, !name.isEmpty { namesByAddress[sender.address] = name }
                 if let kind = DeviceKind(protocolValue: hello.kind) { kindsByAddress[sender.address] = kind }
+                if let id = hello.sender, !id.isEmpty { sendersByAddress[sender.address] = id }
+            }
+            // 正在放的是同一台电脑从旧地址发来的流（它换了 IP）：旧地址不会再有包了，结束它，
+            // 让新地址马上接上；不然要等超时，这期间还会跟它说“正被它自己占用”
+            if let id = hello.sender, !id.isEmpty, let current = core.currentStream(), current.sender != sender.address,
+               lock.withLock({ sendersByAddress[current.sender] }) == id {
+                core.endStream(current.id, from: current.sender, reason: .network)
             }
             if hello.standby == true, let stream = hello.stream, stream != 0 {
                 core.enterStandby(stream: stream, from: sender.address, resumeSequence: hello.seq, now: now)
@@ -131,12 +140,13 @@ public final class ControlResponder: @unchecked Sendable {
             peers = peers.filter { now - $0.value.lastSeen < 30 }
             if let current = reconnect, now >= current.until { reconnect = nil }
             if endpoints.count > Self.maxAddresses || namesByAddress.count > Self.maxAddresses
-                || kindsByAddress.count > Self.maxAddresses {
+                || kindsByAddress.count > Self.maxAddresses || sendersByAddress.count > Self.maxAddresses {
                 var keep = Set(peers.keys.map(\.address))
                 if let target = reconnect?.endpoint { keep.insert(target.address) }
                 endpoints = endpoints.filter { keep.contains($0.key) }
                 namesByAddress = namesByAddress.filter { keep.contains($0.key) }
                 kindsByAddress = kindsByAddress.filter { keep.contains($0.key) }
+                sendersByAddress = sendersByAddress.filter { keep.contains($0.key) }
             }
             return (peers.filter { now - $0.value.lastSeen < Self.peerTimeout }.map(\.key), reconnect?.endpoint)
         }

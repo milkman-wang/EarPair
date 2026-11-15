@@ -28,6 +28,7 @@ TestOptions();
 TestControlPacket();
 TestStrings();
 TestAddressPicker();
+TestAddressFollower();
 TestReleaseInfo();
 Console.WriteLine(failures == 0 ? "全部通过" : $"{failures} 项没通过");
 return failures == 0 ? 0 : 1;
@@ -118,6 +119,36 @@ void TestAddressPicker()
           !AddressPicker.IsVirtual(NetworkInterfaceType.Ethernet, "Intel(R) Ethernet Connection", "以太网") &&
           !AddressPicker.IsVirtual(NetworkInterfaceType.Wireless80211, "Intel(R) Wi-Fi 6E AX211", "WLAN"),
           "认得出 ZeroTier、Tailscale、隧道网卡，不误判真实网卡");
+}
+
+// Mac 的地址变了（换了 Wi-Fi、DHCP 换了 IP）时 Windows 端换不换、换到哪
+void TestAddressFollower()
+{
+    Console.WriteLine("Mac 换了地址");
+    LocalNetwork Net(string ip, bool gateway, bool isVirtual) =>
+        new(IPAddress.Parse(ip), IPAddress.Parse("255.255.255.0"), gateway, isVirtual);
+    LocalNetwork[] local = [Net("192.168.1.50", true, false), Net("10.10.10.7", false, true)];
+    string[] none = [];
+
+    Check(AddressFollower.Next("192.168.1.20", "192.168.1.35", ["192.168.1.35", "192.168.1.20"], true, none, local)
+          == "192.168.1.35", "联系不上，Bonjour 报了新地址：换过去");
+    Check(AddressFollower.Next("192.168.1.20", "192.168.1.35", ["192.168.1.35", "192.168.1.20"], false, none, local)
+          is null, "还连得上、新地址不比它好：不换（不会来回跳）");
+    Check(AddressFollower.Next("10.10.10.4", "192.168.1.35", ["192.168.1.35", "10.10.10.4"], false, none, local)
+          == "192.168.1.35", "还连得上，但新地址在同一个局域网、旧的是 ZeroTier：换过去");
+    Check(AddressFollower.Next("192.168.1.20", "192.168.1.20", ["10.10.10.4", "192.168.1.35", "192.168.1.20"], true,
+                               ["192.168.1.20"], local) == "192.168.1.35",
+          "Bonjour 还挑着旧地址，但联系不上：先试同一个局域网里报过的其他地址");
+    Check(AddressFollower.Next("192.168.1.35", "192.168.1.20", ["10.10.10.4", "192.168.1.35", "192.168.1.20"], true,
+                               ["192.168.1.20", "192.168.1.35"], local) == "10.10.10.4",
+          "局域网里的都试过了：再试 ZeroTier 的");
+    Check(AddressFollower.Next("10.10.10.4", "192.168.1.20", ["10.10.10.4", "192.168.1.35", "192.168.1.20"], true,
+                               ["192.168.1.20", "192.168.1.35", "10.10.10.4"], local) is null,
+          "全都试过了：不再换（等 Bonjour 重新查）");
+    Check(AddressFollower.Next("mac.local", "192.168.1.35", ["192.168.1.35"], true, none, local) is null,
+          "手动填的主机名：不替换");
+    Check(AddressFollower.Next("192.168.1.20", null, ["fe80::1", "169.254.1.1"], true, ["192.168.1.20"], local) is null,
+          "只有 IPv6 和链路本地地址：不试");
 }
 
 void Check(bool ok, string name)

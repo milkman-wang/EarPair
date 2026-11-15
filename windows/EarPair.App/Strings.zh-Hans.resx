@@ -255,6 +255,12 @@
   <data name="LogAddressChanged" xml:space="preserve">
     <value>{0} 换了地址：{1} → {2}</value>
   </data>
+  <data name="LogTryAddress" xml:space="preserve">
+    <value>{0} 在 {1} 没有回应，试试 {2}</value>
+  </data>
+  <data name="LogRediscover" xml:space="preserve">
+    <value>重新在网络里查找 {0}</value>
+  </data>
   <data name="LogSessionEnding" xml:space="preserve">
     <value>关机或注销：停止发送，恢复本机声音</value>
   </data>

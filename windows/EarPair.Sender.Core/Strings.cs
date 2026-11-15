@@ -36,6 +36,7 @@ public static class CoreStrings
     public static string LogWakeForMac => Get(nameof(LogWakeForMac));
     public static string LogPausedNoResponse => Get(nameof(LogPausedNoResponse));
     public static string LogPausedBusy => Get(nameof(LogPausedBusy));
+    public static string LogLocalAddressGone(string address) => Format(nameof(LogLocalAddressGone), address);
     // 发送时本机静音
     public static string LogMuteOff => Get(nameof(LogMuteOff));
     public static string LogMuteSkipped(string device) => Format(nameof(LogMuteSkipped), device);

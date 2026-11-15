@@ -277,6 +277,12 @@
   <data name="LogAddressChanged" xml:space="preserve">
     <value>{0} changed address: {1} → {2}</value>
   </data>
+  <data name="LogTryAddress" xml:space="preserve">
+    <value>{0} isn't answering at {1}; trying {2}</value>
+  </data>
+  <data name="LogRediscover" xml:space="preserve">
+    <value>Looking for {0} on the network again</value>
+  </data>
   <data name="LogSessionEnding" xml:space="preserve">
     <value>Shutting down or signing out: stopping, restoring this PC's sound</value>
   </data>

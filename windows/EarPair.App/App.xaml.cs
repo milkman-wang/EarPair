@@ -35,6 +35,23 @@ public partial class App : Application
     public MacDiscovery Discovery { get; } = new();
     public Updater Updater { get; } = new(VersionText.Parse(Version) ?? new Version(0, 0, 0));
     private DispatcherQueueTimer? _updateTimer;
+    private DispatcherQueueTimer? _followTimer;
+    /// <summary>目标 Mac 联系不上以后试过的地址（联系上了就清空）</summary>
+    private readonly HashSet<string> _triedAddresses = [];
+    /// <summary>以下都是 Environment.TickCount64：上次换地址、开始联系不上、上次重新查找</summary>
+    private long _addressChangedAt = long.MinValue / 2;
+    private long _unreachableSince;
+    private long _rediscoveredAt = long.MinValue / 2;
+    /// <summary>换了地址以后先给它这么久（毫秒）回应，再判断要不要接着换</summary>
+    private const long AddressGrace = 6_000;
+    /// <summary>
+    /// 联系不上这么久（毫秒）、能试的地址都试过了，就让 Bonjour 重新查一遍。之后间隔从 30 秒起每次加倍，最长 5 分钟
+    /// （Mac 睡着了的话不用一直查）；联系上了就重新从 30 秒算
+    /// </summary>
+    private const long RediscoverAfter = 10_000;
+    private const long RediscoverFirst = 30_000;
+    private const long RediscoverLongest = 300_000;
+    private long _rediscoverEvery = RediscoverFirst;
     /// <summary>关掉的更新提示（状态 + 版本）：这次运行里同样的提示不再显示</summary>
     private string? _updateBarDismissed;
 
@@ -128,6 +145,11 @@ public partial class App : Application
         Engine.RemoteSeen += status => _dispatcher.TryEnqueue(() => OnRemoteSeen(status));
         Discovery.Changed += () => _dispatcher.TryEnqueue(OnDiscoveryChanged);
         Discovery.Start();
+        // Mac 的地址变了不一定伴随 Bonjour 的变化（新地址可能早就报过了，只是当时旧地址还连得上）：定时再看一遍
+        _followTimer = _dispatcher.CreateTimer();
+        _followTimer.Interval = TimeSpan.FromSeconds(2);
+        _followTimer.Tick += (_, _) => FollowTargetAddress();
+        _followTimer.Start();
 
         // 启动 30 秒后检查一次更新（不和开机时的网络、发送抢），之后每 12 小时一次；自动检查关掉了就不查
         Updater.Log += AppLog.Write;
@@ -271,35 +293,84 @@ public partial class App : Application
         QueueRefresh();
     }
 
-    /// <summary>
-    /// Bonjour 报告了目标 Mac 的新地址：原地址没有回应时跟着换（DHCP 换了 IP）；新地址更好时也换，
-    /// 比如之前连的是 Mac 在 ZeroTier 里的地址，现在找到了同一个局域网里的（只重连一次）
-    /// </summary>
     private void OnDiscoveryChanged()
     {
-        if (Settings.Target is { Id: { Length: > 0 } id } target)
+        FollowTargetAddress();
+        QueueRefresh();
+    }
+
+    /// <summary>
+    /// 目标 Mac 的地址变了（DHCP 换了 IP、Mac 换了 Wi-Fi）时跟着换。没在发送时直接用 Bonjour 挑的地址；
+    /// 发送时由 AddressFollower 决定：联系不上就换到 Bonjour 挑的或者它报过的其他地址，更好的地址出现了也换
+    /// （比如之前连的是 Mac 在 ZeroTier 里的地址，现在找到了同一个局域网里的）。都试过了还不行，就让 Bonjour 重新查一遍
+    /// </summary>
+    private void FollowTargetAddress()
+    {
+        if (Settings.Target is not { Id: { Length: > 0 } id } target) return;
+        DiscoveredMac? seen = Discovery.Macs.FirstOrDefault(m => m.MacId == id);
+        long now = Environment.TickCount64;
+        if (!SwitchOn)
         {
-            DiscoveredMac? seen = Discovery.Macs.FirstOrDefault(m => m.MacId == id);
-            if (seen is not null && (seen.Address != target.Host || seen.Port != target.Port))
+            _triedAddresses.Clear();
+            if (seen is not null && System.Net.IPAddress.TryParse(target.Host, out _) &&
+                (seen.Address != target.Host || seen.Port != target.Port))
+                MoveTarget(target, seen, seen.Address, Strings.LogAddressChanged(target.Name, target.Host, seen.Address));
+            return;
+        }
+
+        SenderSnapshot snapshot = Engine.Snapshot;
+        bool unreachable = snapshot.Health != RemoteHealth.Busy &&
+                           (snapshot.State is SenderState.WaitingForMac or SenderState.Failed ||
+                            snapshot.Health == RemoteHealth.NoResponse);
+        if (!unreachable)
+        {
+            _triedAddresses.Clear();
+            _unreachableSince = 0;
+            _rediscoverEvery = RediscoverFirst;
+        }
+        else if (_unreachableSince == 0)
+        {
+            _unreachableSince = now;
+        }
+        // 刚换过地址：先给它时间回应
+        if (now - _addressChangedAt < AddressGrace) return;
+
+        if (seen is not null)
+        {
+            if (unreachable) _triedAddresses.Add(target.Host);
+            string? next = seen.Port != target.Port ? seen.Address
+                : AddressFollower.Next(target.Host, seen.Address, seen.Addresses ?? [seen.Address], unreachable,
+                                       _triedAddresses, AddressPicker.Current());
+            if (next is not null)
             {
-                bool waiting = Engine.Snapshot.State is SenderState.WaitingForMac or SenderState.Failed ||
-                               Engine.Snapshot.Health == RemoteHealth.NoResponse;
-                // 手动填的是主机名时不替换
-                bool better = System.Net.IPAddress.TryParse(target.Host, out _) &&
-                              AddressPicker.Pick([target.Host, seen.Address], target.Host, AddressPicker.Current())
-                              == seen.Address;
-                if (waiting || !SwitchOn || better)
-                {
-                    AppLog.Write(Strings.LogAddressChanged(target.Name, target.Host, seen.Address));
-                    target.Host = seen.Address;
-                    target.Port = seen.Port;
-                    target.Kind = seen.Kind ?? target.Kind;
-                    Settings.Remember(target);
-                    Settings.Save();
-                    if (SwitchOn) StartSending();
-                }
+                string message = next == seen.Address
+                    ? Strings.LogAddressChanged(target.Name, target.Host, next)
+                    : Strings.LogTryAddress(target.Name, target.Host, next);
+                MoveTarget(target, seen, next, message);
+                _addressChangedAt = now;
+                StartSending();
+                return;
             }
         }
+
+        if (unreachable && now - _unreachableSince > RediscoverAfter && now - _rediscoveredAt > _rediscoverEvery)
+        {
+            AppLog.Write(Strings.LogRediscover(target.Name.Length > 0 ? target.Name : target.Host));
+            _rediscoveredAt = now;
+            _rediscoverEvery = Math.Min(2 * _rediscoverEvery, RediscoverLongest);
+            _triedAddresses.Clear();
+            Discovery.Refresh();
+        }
+    }
+
+    private void MoveTarget(MacTarget target, DiscoveredMac seen, string address, string message)
+    {
+        AppLog.Write(message);
+        target.Host = address;
+        target.Port = seen.Port;
+        target.Kind = seen.Kind ?? target.Kind;
+        Settings.Remember(target);
+        Settings.Save();
         QueueRefresh();
     }
 
@@ -400,6 +471,7 @@ public partial class App : Application
         Settings.Save();
         _tray?.Dispose();
         _updateTimer?.Stop();
+        _followTimer?.Stop();
         Updater.Dispose();
         _window?.Close();
         Exit();

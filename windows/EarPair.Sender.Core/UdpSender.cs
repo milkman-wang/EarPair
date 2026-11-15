@@ -26,6 +26,22 @@ public sealed class UdpSender : IDisposable
 
     public IPEndPoint? RemoteEndPoint => _client.Client.RemoteEndPoint as IPEndPoint;
 
+    /// <summary>发包用的本机地址（连接时按路由选定，之后不会变）；套接字已关闭时是 null</summary>
+    public IPAddress? LocalAddress
+    {
+        get
+        {
+            try
+            {
+                return (_client.Client.LocalEndPoint as IPEndPoint)?.Address;
+            }
+            catch (ObjectDisposedException)
+            {
+                return null;
+            }
+        }
+    }
+
     public UdpSender(string host, int port, bool receive = false)
     {
         _client = new UdpClient(AddressFamily.InterNetwork);

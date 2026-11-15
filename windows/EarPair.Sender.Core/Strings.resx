@@ -74,6 +74,9 @@
   <data name="LogPausedBusy" xml:space="preserve">
     <value>The Mac is playing another PC's sound; sending paused</value>
   </data>
+  <data name="LogLocalAddressGone" xml:space="preserve">
+    <value>This PC no longer has the address {0}; reconnecting from its new address</value>
+  </data>
   <data name="LogMuteOff" xml:space="preserve">
     <value>Mute this PC while sending: off</value>
   </data>
